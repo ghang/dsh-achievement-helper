@@ -1,0 +1,11 @@
+node_modules/
+lib/
+.release/
+out/
+.env
+.env.*
+*.pem
+*.key
+.credentials.yaml
+.DS_Store
+*.tgz
