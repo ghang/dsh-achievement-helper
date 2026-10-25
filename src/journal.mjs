@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { THEME_IDS as THEMES, ICON_IDS as ICONS, RARITIES, FRAME_STYLES, COLLECTION_LIMITS, ACHIEVEMENT_THEME_TITLES,
-  collectionCatalog, freshCollection, syncCollectionPoints, validateCollection, configureCollectionCharacters, drawCollection } from './collection.mjs';
+  collectionCatalog, freshCollection, presentCollection, syncCollectionPoints, validateCollection, configureCollectionCharacters, drawCollection } from './collection.mjs';
 
 const VERSION = 2;
 export const JOURNAL_LIMITS = Object.freeze({ facts: 100000, requests: 10000, definitions: 256, awards: 1024, timeline: 4096, bytes: 16 * 1024 * 1024, batch: 4096 });
@@ -43,6 +43,24 @@ function safeContext(context) {
   const result = { source: option(context.source ?? 'model', ['model', 'user'], 'context.source') };
   for (const key of ['workspaceKey', 'sessionId', 'turnKey']) if (context[key] !== undefined) result[key] = opaque(context[key], `context.${key}`);
   return result;
+}
+function archiveDefinitions(state, ids, context, at) {
+  const touched = new Set();
+  for (const id of ids) {
+    opaque(id, 'delete id'); if (touched.has(id)) fail('INVALID_INPUT', 'A deletion batch cannot repeat an identity.'); touched.add(id);
+    const d = state.definitions.find(item => item.id === id);
+    if (!d) fail('NOT_FOUND', 'The custom achievement does not exist.');
+    if (d.source !== 'model') fail('BUILTIN_DEFINITION_IMMUTABLE', 'Built-in achievements cannot be deleted.');
+    if (d.scope === 'current_workspace' && context.source === 'model' && context.workspaceKey !== d.workspaceKey) fail('WORKSPACE_MISMATCH', 'This model deletion does not belong to the bound workspace.');
+    if (d.status !== 'archived') { d.frozenIncomplete ||= Object.keys(d.unknown).length > 0; d.unknown = {}; d.status = 'archived'; d.updatedAt = at; d.revision++; }
+    state.equipment.badges = state.equipment.badges.filter(value => value !== id);
+    if (state.equipment.charm === id) state.equipment.charm = null;
+  }
+}
+function drawTheme(state, proposed) {
+  const theme = option(proposed ?? state.preferences.theme, THEMES, 'draw theme');
+  if (theme !== state.preferences.theme) throw new JournalError('THEME_MISMATCH', '抽卡主题已变化，请使用当前全局主题重新发起抽卡。', { status: 409 });
+  return theme;
 }
 function themeCopy(title, description, supplied, themeIds = THEMES) {
   if (supplied !== undefined) fields(supplied, themeIds, 'themes');
@@ -245,7 +263,7 @@ function publicSnapshot(state, notifications, storageStatus) {
   const totals = { tokens: count('tokens'), knownTokens, turns: count('turn_completed'), fileReads: count('file_read'), fileChanges: count('file_changed'), formats: distinct('format_read'), skills: distinct('skill_loaded'), delegations: count('delegate_completed'), presentations: count('file_presented'), routes: distinct('route_used'), recalls: count('recall_used'), byMetric: Object.fromEntries(KINDS.map(kind => [kind, count(kind)])) };
   totals.usage = Object.fromEntries(USAGE_FIELDS.map(key => [key, key === 'totalTokens' ? totals.tokens : state.usageMissing[key] ? null : state.usage[key] ?? (knownTokens === 0 && !pendingByMetric.tokens ? 0 : null)]));
   const definitions = state.definitions.map(d => ({ id: d.id, title: d.title, description: d.description, icon: d.icon, category: d.category, source: d.source, configuredBy: d.configuredBy, rule: clone(d.rule), scope: d.scope, ...(d.workspaceKey ? { workspaceKey: d.workspaceKey } : {}), baseline: d.baseline, baselineAt: d.baselineAt, hidden: d.hidden, revision: d.revision, status: d.status, progress: (d.frozenIncomplete || Object.keys(d.unknown).length) && d.value < d.rule.target ? null : d.value, knownProgress: d.value, target: d.rule.target, progressRatio: Math.min(1, d.value / d.rule.target), incomplete: d.frozenIncomplete || Object.keys(d.unknown).length > 0, ...(d.unlockedAt !== undefined ? { unlockedAt: d.unlockedAt } : {}), themes: clone(d.themes) }));
-  return clone({ ...state.debug === true ? { debug: true } : {}, revision: state.revision, createdAt: state.createdAt, updatedAt: state.updatedAt, preferences: state.preferences, totals, level: levelFor(knownTokens, !!pendingByMetric.tokens), definitions, awards: state.awards, timeline: [...state.timeline].sort((a, b) => b.at - a.at || b.id.localeCompare(a.id)), notifications, equipment: state.equipment, collection: state.collection, coverage: { mode: 'observed_facts', startedAt: state.createdAt, firstFactAt: state.firstFactAt, lastFactAt: state.lastFactAt, pendingFacts: Object.keys(state.pending).length, pendingByMetric, complete: Object.keys(state.pending).length === 0, historyComplete: false, scope: 'collector_supplied', note: 'Coverage includes only facts actually supplied by the collector; account-wide history is not implied.' }, storage: { schemaVersion: VERSION, status: storageStatus, atomic: true, writer: 'exclusive_lock_single_process', limits: JOURNAL_LIMITS, usage: { facts: Object.keys(state.facts).length, pendingFacts: Object.keys(state.pending).length, requests: Object.keys(state.requests).length, definitions: state.definitions.length, awards: state.awards.length, characters: state.collection.characters.length, draws: state.collection.draws.length } } });
+  return clone({ ...state.debug === true ? { debug: true } : {}, revision: state.revision, createdAt: state.createdAt, updatedAt: state.updatedAt, preferences: state.preferences, totals, level: levelFor(knownTokens, !!pendingByMetric.tokens), definitions, awards: state.awards, timeline: [...state.timeline].sort((a, b) => b.at - a.at || b.id.localeCompare(a.id)), notifications, equipment: state.equipment, collection: presentCollection(state.collection), coverage: { mode: 'observed_facts', startedAt: state.createdAt, firstFactAt: state.firstFactAt, lastFactAt: state.lastFactAt, pendingFacts: Object.keys(state.pending).length, pendingByMetric, complete: Object.keys(state.pending).length === 0, historyComplete: false, scope: 'collector_supplied', note: 'Coverage includes only facts actually supplied by the collector; account-wide history is not implied.' }, storage: { schemaVersion: VERSION, status: storageStatus, atomic: true, writer: 'exclusive_lock_single_process', limits: JOURNAL_LIMITS, usage: { facts: Object.keys(state.facts).length, pendingFacts: Object.keys(state.pending).length, requests: Object.keys(state.requests).length, definitions: state.definitions.length, awards: state.awards.length, characters: state.collection.characters.length, draws: state.collection.draws.length } } });
 }
 async function atomicWrite(file, data) {
   const serialized = JSON.stringify(data);
@@ -344,9 +362,10 @@ export async function createJournal({ file, now = Date.now, randomInt, allowDebu
         else if (input.action === 'complete_all') { for (const d of next.definitions) if (d.status === 'active' && d.unlockedAt === undefined) complete(d); }
         else if (input.action === 'charm') next.equipment.charm = option(input.charm ?? 'star', ['compass', 'star', 'leaf'], 'debug charm');
         else {
+          const theme = drawTheme(next, input.theme);
           if (next.collection.points.balance < 1) complete(first());
           syncCollectionPoints(next.collection, next.awards);
-          drawCollection(next.collection, { requestHash: hash(input.requestId), theme: input.theme ?? next.preferences.theme, at, randomInt });
+          drawCollection(next.collection, { requestHash: hash(input.requestId), theme, at, randomInt });
           const results = next.collection.draws.at(-1).results;
           next.equipment.character = results.reduce((best, item) => RARITIES.indexOf(item.rarity) > RARITIES.indexOf(best.rarity) ? item : best).id;
         }
@@ -359,7 +378,8 @@ export async function createJournal({ file, now = Date.now, randomInt, allowDebu
       try { fields(input, ['requestId', 'theme'], 'draw'); input = clone(input); } catch (error) { return Promise.reject(error); }
       return mutate((next, at) => {
         if (!request(next, 'draw', input, { source: 'user' })) return { changed: false };
-        drawCollection(next.collection, { requestHash: hash(input.requestId), theme: input.theme, at, randomInt });
+        const theme = drawTheme(next, input.theme);
+        drawCollection(next.collection, { requestHash: hash(input.requestId), theme, at, randomInt });
         return { changed: true };
       });
     },
@@ -367,8 +387,17 @@ export async function createJournal({ file, now = Date.now, randomInt, allowDebu
       let c; try { fields(input, ['requestId', 'expectedRevision', 'characters'], 'configureCharacters'); input = clone(input); c = safeContext(context); } catch (error) { return Promise.reject(error); }
       return mutate((next, at) => {
         if (!request(next, 'configureCharacters', input, c)) return { changed: false };
-        configureCollectionCharacters(next.collection, input.characters, { requestHash: hash(input.requestId), source: c.source, at });
+        configureCollectionCharacters(next.collection, input.characters, { requestHash: hash(input.requestId), source: c.source, at, defaultTheme: next.preferences.theme });
         return { changed: true };
+      });
+    },
+    deleteDefinitions(input, context = {}) {
+      let c; try { fields(input, ['requestId', 'expectedRevision', 'ids'], 'deleteDefinitions'); input = clone(input); c = safeContext(context); if (!Array.isArray(input.ids) || input.ids.length < 1 || input.ids.length > JOURNAL_LIMITS.definitions) fail('INVALID_INPUT', 'Delete a bounded nonempty list of custom achievements.'); } catch (error) { return Promise.reject(error); }
+      return mutate((next, at) => {
+        // Keep the schema-2 persisted request vocabulary readable by rc.2.
+        // The ids payload still distinguishes deletion from ordinary config.
+        if (!request(next, 'configure', input, c)) return { changed: false };
+        archiveDefinitions(next, input.ids, c, at); return { changed: true };
       });
     },
     ingest(facts, { notify = true } = {}) {
@@ -431,7 +460,7 @@ export async function createJournal({ file, now = Date.now, randomInt, allowDebu
           if (!old) next.definitions.push(d);
           const notice = award(next, d, at); if (notice) notifications.push(notice);
         }
-        for (const id of archives) { opaque(id, 'archive id'); const d = next.definitions.find(d => d.id === id); if (!d) fail('NOT_FOUND', 'The definition to archive does not exist.'); if (d.scope === 'current_workspace' && c.source === 'model' && c.workspaceKey !== d.workspaceKey) fail('WORKSPACE_MISMATCH', 'This model archive request does not belong to the bound workspace.'); if (d.status !== 'archived') { d.frozenIncomplete ||= Object.keys(d.unknown).length > 0; d.unknown = {}; d.status = 'archived'; d.updatedAt = at; d.revision++; } }
+        archiveDefinitions(next, archives, c, at);
         if (input.theme !== undefined) next.preferences.theme = option(input.theme, THEMES, 'theme');
         return { changed: true, notifications };
       });
@@ -465,6 +494,7 @@ export async function createJournal({ file, now = Date.now, randomInt, allowDebu
       try { fields(input, ['id', 'slot', 'equipped'], 'equip'); input = clone(input); opaque(input.id, 'equipment id'); option(input.slot, ['badge', 'charm', 'character'], 'equipment slot'); if (input.equipped !== undefined) bool(input.equipped, 'equipped'); } catch (error) { return Promise.reject(error); }
       return mutate(next => {
         const previous = clone(next.equipment), on = input.equipped !== false, owned = next.awards.some(a => a.definitionId === input.id);
+        if (on && (input.slot === 'badge' || input.slot === 'charm' && !['compass', 'star', 'leaf', 'none'].includes(input.id)) && next.definitions.some(d => d.id === input.id && d.status === 'archived')) fail('ARCHIVED', 'A deleted achievement cannot be equipped again.');
         if (input.slot === 'badge') {
           if (on && !owned) fail('NOT_OWNED', 'Only an earned badge can be equipped.');
           if (!on) next.equipment.badges = next.equipment.badges.filter(id => id !== input.id);

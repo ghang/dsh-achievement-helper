@@ -242,3 +242,9 @@
 @container achievement-center (max-width:580px){.daj-draw-result-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.daj-debug-panel{padding:12px}.daj-debug-panel .daj-section-heading{gap:9px}.daj-debug-actions{gap:9px;grid-template-columns:1fr}.daj-debug-actions .daj-row{justify-content:flex-start}.daj-debug-management{justify-content:flex-start}}
 @container achievement-center (max-width:400px){.daj-draw-result-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:590px){.daj-debug-banner{gap:7px;font-size:10px;padding:6px 8px}.daj-debug-banner>span{max-width:100px}.daj-backdrop.daj-debug-backdrop{padding-top:45px}.daj-debug-backdrop .daj-center{height:calc(100dvh - 45px);max-height:calc(100dvh - 45px)}}
+.daj-current-theme{font-size:11px;color:var(--daj-muted);line-height:1.8;margin:6px 0 12px!important}.daj-draw-controls>.daj-current-theme{margin:0!important;align-self:center}
+.daj-generation-count{width:116px;flex:none}.daj-generation-count input{font-variant-numeric:tabular-nums}
+.daj-delete-control{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:10px;padding-top:7px;border-top:1px solid var(--daj-line)}.daj-delete-control>.daj-text-button:first-child{color:#a36052}.daj-delete-control>small{font-size:9px;line-height:1.7;color:var(--daj-muted)}.daj-detail>.daj-delete-control{justify-content:center}
+.daj-history-preserved{font-size:10px;line-height:1.8;color:var(--daj-muted);margin:7px 0 0!important;padding:0 15px;overflow-wrap:anywhere}
+.daj-character-generator>label.daj-direction-row{display:block}
+@container achievement-center (max-width:580px){.daj-generation-count{width:105px}.daj-delete-control{gap:7px}.daj-draw-controls>.daj-current-theme{font-size:10px}}

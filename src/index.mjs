@@ -94,7 +94,7 @@ function unavailableJournal() {
     collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [], owned: [], draws: [] },
     storage: { status: 'unavailable', message: '档案加载失败，原数据已保留；请停止其它写入进程或修复存储后重新启用。' } }),
     catalog: () => ({ metrics: [], templates: [], available: false }),
-    ingest: failure, configure: failure, configureCharacters: failure, draw: failure, drawReceipt: () => null, report: failure, preferences: failure, equip: failure, close: async () => {},
+    ingest: failure, configure: failure, deleteDefinitions: failure, configureCharacters: failure, draw: failure, drawReceipt: () => null, report: failure, preferences: failure, equip: failure, close: async () => {},
   };
 }
 
@@ -272,7 +272,7 @@ export async function createAchievementJournal(ctx, config = {}) {
     register({ name: 'achievement_query', description: 'Read personal achievement progress and earned records. Token totals are observed use, not business quality or acceptance.',
       parameters: { id: { type: 'string', description: 'Optional definition id.' }, history: { type: 'boolean', description: 'Include the most recent 20 records.' }, collection: { type: 'boolean', description: 'Include point balance, owned character counts and character metadata; images are omitted.' } },
       execute: args => { const s = state(); return { revision: s.revision, preferences: s.preferences, totals: s.totals, level: s.level,
-        definitions: s.definitions.filter(d => !args.id || d.id === args.id).slice(0, 64), coverage: s.coverage,
+        definitions: s.definitions.filter(d => args.id ? d.id === args.id : d.status !== 'archived').slice(0, 64), coverage: s.coverage,
         ...(args.history ? { timeline: (s.timeline ?? []).slice(0, 20), awards: (s.awards ?? []).slice(-20) } : {}),
         ...(args.collection ? { collection: { points: s.collection.points, owned: s.collection.owned,
           characters: s.collection.characters.slice(0, 128).map(({ art, ...metadata }) => metadata) } } : {}) }; } });
@@ -353,6 +353,10 @@ export async function createAchievementJournal(ctx, config = {}) {
           if (path === API + '/characters') {
             const body = await bodyOf(req, 3 * 1024 * 1024);
             return json(res, 200, scope ? debugState(scope, await debug.mutate(scope, 'configureCharacters', body)) : await mutate('configureCharacters', body));
+          }
+          if (path === API + '/delete') {
+            const body = await bodyOf(req);
+            return json(res, 200, scope ? debugState(scope, await debug.mutate(scope, 'deleteDefinitions', body)) : await mutate('deleteDefinitions', body));
           }
           const method = ({ preferences: 'preferences', equip: 'equip', configure: 'configure', report: 'report' })[path.slice(API.length + 1)];
           if (method) { const body = await bodyOf(req); return json(res, 200, scope ? debugState(scope, await debug.mutate(scope, method, body)) : await mutate(method, body)); }

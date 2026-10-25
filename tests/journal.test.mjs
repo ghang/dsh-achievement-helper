@@ -224,7 +224,7 @@ test('themes change presentation without re-granting, resetting conditions, or l
   assert.deepEqual(f.j.snapshot().equipment, { badges: ['themed'], charm: 'star', character: null });
 });
 
-test('archiving freezes a goal while preserving its earned collection and appearance', async t => {
+test('archiving freezes a custom goal and preserves history while taking its badge off', async t => {
   const f = await fixture(t);
   await f.j.configure({ requestId: 'archive-cases', definitions: [definition('unfinished', { template: 'count', metric: 'tokens', target: 1000 }), definition('earned', { template: 'count', metric: 'tokens', target: 50 })] });
   await f.j.ingest([fact('archive-progress', 'tokens')]); await f.j.equip({ id: 'earned', slot: 'badge' });
@@ -233,7 +233,7 @@ test('archiving freezes a goal while preserving its earned collection and appear
   assert.equal(card(f.j.snapshot(), 'unfinished').progress, 100);
   assert.equal(card(f.j.snapshot(), 'unfinished').status, 'archived');
   assert.equal(f.j.snapshot().awards.filter(a => a.definitionId === 'earned').length, 1);
-  assert.deepEqual(f.j.snapshot().equipment.badges, ['earned']);
+  assert.deepEqual(f.j.snapshot().equipment.badges, []);
 });
 
 test('archiving incomplete progress does not later pretend the unknown interval was zero', async t => {

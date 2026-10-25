@@ -25,6 +25,7 @@ test('browser debug scope isolates all writes, refuses generation and never fall
   const start=await(await request('/debug/start',{})).json();assert.ok(start.token);assert.equal(start.snapshot.debug.active,true);
   const completed=await(await request('/debug/action',{requestId:'complete-1',action:'complete'},start.token)).json();
   assert.equal(completed.collection.points.balance,initial.collection.points.balance+1);
+  assert.equal((await request('/preferences',{theme:'xianxia'},start.token)).status,200);
   const drawn=await(await request('/debug/action',{requestId:'draw-1',action:'draw',theme:'xianxia'},start.token)).json();
   assert.equal(drawn.draw.results.length,10);assert.ok(drawn.equipment.character);assert.equal(drawn.collection.points.spent,1);
   const retried=await(await request('/debug/action',{requestId:'draw-1',action:'draw',theme:'xianxia'},start.token)).json();assert.deepEqual(retried.draw,drawn.draw);assert.equal(retried.collection.points.spent,1);
@@ -33,6 +34,11 @@ test('browser debug scope isolates all writes, refuses generation and never fall
   const generation=await request('/generation',{requestId:'no-model',kind:'characters',theme:'cyber'},start.token);assert.equal(generation.status,409);assert.equal((await generation.json()).code,'DEBUG_GENERATION_DISABLED');assert.equal(modelRequests,0);
   assert.equal((await(await request('/catalog',undefined,start.token)).json()).generation.available,false);
   assert.equal((await(await request('/generation',undefined,start.token)).json()).job,null);
+  const created=await(await request('/configure',{requestId:'debug-custom-delete',definitions:[{title:'仅调试的自定义成就',rule:{template:'model_report'}}]},start.token)).json();
+  const custom=created.definitions.find(d=>d.title==='仅调试的自定义成就');assert.ok(custom);
+  const deleted=await request('/delete',{requestId:'delete-in-debug',ids:[custom.id]},start.token);
+  assert.equal(deleted.status,200);const deletedState=await deleted.json();
+  assert.equal(deletedState.debug.active,true);assert.equal(deletedState.definitions.find(d=>d.id===custom.id).status,'archived');
   assert.deepEqual(await readFile(file),bytes,'Debug complete/draw/charm/preferences do not write real bytes');
   const real=await(await request('/state')).json();assert.deepEqual(real.awards,initial.awards);assert.deepEqual(real.collection,initial.collection);assert.deepEqual(real.notifications,[]);
   await service.journal.ingest([{id:'real-work-during-debug',kind:'turn_completed',at:Date.now(),sessionId:'real-work',turnKey:'real-turn'}]);

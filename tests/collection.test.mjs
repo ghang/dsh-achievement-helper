@@ -67,19 +67,20 @@ test('points come from unique permanent awards and never from repeated facts, th
 
 test('zero points, unexpected write fields and invalid themes cannot create a charge or a receipt', async t => {
   const f = await fixture(t);
-  await assert.rejects(f.j.draw({ requestId: 'later-valid', theme: 'xianxia' }), code('NOT_ENOUGH_POINTS'));
+  await assert.rejects(f.j.draw({ requestId: 'later-valid', theme: 'explorer' }), code('NOT_ENOUGH_POINTS'));
   assert.equal(f.j.drawReceipt('later-valid'), null); assert.equal(f.j.snapshot().revision, 0);
   await assert.rejects(f.j.draw({ requestId: 'spoof-points', theme: 'xianxia', balance: 100 }), code('INVALID_INPUT'));
   await assert.rejects(f.j.preferences({ points: { balance: 100 } }), code('INVALID_INPUT'));
   await f.earn(); const before = f.j.snapshot();
   await assert.rejects(f.j.draw({ requestId: 'bad-theme', theme: 'unknown' }), code('INVALID_INPUT'));
   assert.deepEqual(f.j.snapshot(), before);
-  await f.j.draw({ requestId: 'later-valid', theme: 'xianxia' });
+  await f.j.draw({ requestId: 'later-valid', theme: 'explorer' });
   assert.equal(f.j.snapshot().collection.points.balance, 0);
 });
 
 test('one point draws ten, duplicates accumulate, and the tenth base-low roll gets its SR guarantee', async t => {
   const rolls = []; const f = await fixture(t, { randomInt: maximum => { rolls.push(maximum); return 0; } });
+  await f.j.preferences({ theme: 'xianxia' });
   await f.earn(2);
   const result = await f.j.draw({ requestId: 'ten-one', theme: 'xianxia' }), receipt = f.j.drawReceipt('ten-one');
   assert.deepEqual(result.collection.points, { earned: 2, spent: 1, balance: 1 });
@@ -91,6 +92,8 @@ test('one point draws ten, duplicates accumulate, and the tenth base-low roll ge
   await f.j.draw({ requestId: 'ten-one', theme: 'xianxia' });
   assert.equal(rolls.length, rollCount); assert.equal(f.j.snapshot().collection.points.spent, 1);
   await assert.rejects(f.j.draw({ requestId: 'ten-one', theme: 'cyber' }), code('REQUEST_ID_REUSED'));
+  await f.j.preferences({ theme: 'cyber' });
+  await f.j.draw({ requestId: 'ten-one', theme: 'xianxia' }); assert.equal(rolls.length, rollCount);
   await f.j.draw({ requestId: 'ten-two', theme: 'cyber' });
   assert.equal(f.j.drawReceipt('ten-one').theme, 'xianxia'); assert.equal(f.j.drawReceipt('ten-two').theme, 'cyber');
   receipt.results.length = 0; assert.equal(f.j.drawReceipt('ten-one').results.length, 10);
@@ -100,30 +103,34 @@ test('one point draws ten, duplicates accumulate, and the tenth base-low roll ge
 
 test('rarity boundaries and the guarantee 10:2 reroll use server randomness', async t => {
   const f = await fixture(t, { randomInt: maximum => maximum === 100 ? 99 : 0 });
+  await f.j.preferences({ theme: 'space' });
   await f.earn(); await f.j.draw({ requestId: 'all-ssr', theme: 'space' });
   assert.ok(f.j.drawReceipt('all-ssr').results.every(item => item.rarity === 'SSR'));
   const g = await fixture(t, { randomInt: maximum => maximum === 12 ? 10 : 0 });
+  await g.j.preferences({ theme: 'space' });
   await g.earn(); await g.j.draw({ requestId: 'guaranteed-ssr', theme: 'space' });
   assert.equal(g.j.drawReceipt('guaranteed-ssr').results[9].rarity, 'SSR');
   let rarityRolls = 0, rerolls = 0;
   const h = await fixture(t, { randomInt: maximum => { if (maximum === 12) rerolls++; return maximum === 100 && rarityRolls++ === 0 ? 88 : 0; } });
+  await h.j.preferences({ theme: 'ocean' });
   await h.earn(); await h.j.draw({ requestId: 'earlier-sr', theme: 'ocean' });
   assert.equal(h.j.drawReceipt('earlier-sr').results[0].rarity, 'SR'); assert.equal(h.j.drawReceipt('earlier-sr').results[9].rarity, 'N'); assert.equal(rerolls, 0);
 });
 
 test('concurrent distinct draws cannot overdraw, and a concurrent repeated request cannot charge twice', async t => {
-  const f = await fixture(t); await f.earn();
+  const f = await fixture(t); await f.j.preferences({ theme: 'garden' }); await f.earn();
   const results = await Promise.allSettled([f.j.draw({ requestId: 'race-a', theme: 'garden' }), f.j.draw({ requestId: 'race-b', theme: 'garden' })]);
   assert.equal(results.filter(item => item.status === 'fulfilled').length, 1);
   assert.equal(results.find(item => item.status === 'rejected').reason.code, 'NOT_ENOUGH_POINTS');
   assert.equal(f.j.snapshot().collection.draws.length, 1); assert.equal(f.j.snapshot().collection.points.balance, 0);
-  const g = await fixture(t); await g.earn();
+  const g = await fixture(t); await g.j.preferences({ theme: 'garden' }); await g.earn();
   await Promise.all([g.j.draw({ requestId: 'same', theme: 'garden' }), g.j.draw({ requestId: 'same', theme: 'garden' })]);
   assert.equal(g.j.snapshot().collection.draws.length, 1); assert.equal(g.j.snapshot().collection.owned.reduce((n, item) => n + item.count, 0), 10);
 });
 
 test('only owned characters equip and old or unrelated removals cannot erase the current character', async t => {
   const f = await fixture(t);
+  await f.j.preferences({ theme: 'xianxia' });
   await assert.rejects(f.j.equip({ id: 'builtin:xianxia:1', slot: 'character' }), code('NOT_OWNED'));
   await f.earn(); await f.j.draw({ requestId: 'equip-pool', theme: 'xianxia' });
   await f.j.equip({ id: 'builtin:xianxia:1', slot: 'character' }); assert.equal(f.j.snapshot().equipment.character, 'builtin:xianxia:1');
@@ -163,7 +170,7 @@ test('an unowned custom pool may move, but collected theme and rarity freeze whi
   const f = await fixture(t, { randomInt: maximum => maximum === 100 ? 0 : maximum - 1 });
   await f.j.configureCharacters({ requestId: 'make-custom', characters: [character({ id: 'custom-fox', theme: 'cyber', rarity: 'R' })] }, { source: 'model' });
   await f.j.configureCharacters({ requestId: 'move-unowned', characters: [character({ id: 'custom-fox' })] });
-  await f.earn(); await f.j.draw({ requestId: 'collect-custom', theme: 'xianxia' });
+  await f.j.preferences({ theme: 'xianxia' }); await f.earn(); await f.j.draw({ requestId: 'collect-custom', theme: 'xianxia' });
   assert.equal(f.j.snapshot().collection.owned.find(item => item.id === 'custom-fox').count, 9);
   const before = f.j.snapshot();
   for (const change of [{ theme: 'space' }, { rarity: 'SSR' }]) await assert.rejects(f.j.configureCharacters({ requestId: `immutable-${Object.keys(change)[0]}`, characters: [{ id: 'custom-fox', ...change }] }), code('CHARACTER_POOL_IMMUTABLE'));
@@ -199,11 +206,12 @@ test('the aggregate image budget rejects a batch without partially adding its ea
 test('RNG failure and disk replacement failure roll back charge, ownership and request id together', async t => {
   let broken = true, rolls = 0;
   const f = await fixture(t, { randomInt: maximum => { if (broken && ++rolls === 4) throw new Error('fixture random unavailable'); return 0; } });
+  await f.j.preferences({ theme: 'academy' });
   await f.earn(); const before = f.j.snapshot();
   await assert.rejects(f.j.draw({ requestId: 'random-retry', theme: 'academy' }), code('RANDOM_UNAVAILABLE'));
   assert.deepEqual(f.j.snapshot(), before); assert.equal(f.j.drawReceipt('random-retry'), null);
   broken = false; await f.j.draw({ requestId: 'random-retry', theme: 'academy' }); assert.equal(f.j.snapshot().collection.points.spent, 1);
-  const g = await fixture(t); await g.earn(); const old = await readFile(g.file, 'utf8'), state = g.j.snapshot(), backup = g.file + '.saved';
+  const g = await fixture(t); await g.j.preferences({ theme: 'garden' }); await g.earn(); const old = await readFile(g.file, 'utf8'), state = g.j.snapshot(), backup = g.file + '.saved';
   await rename(g.file, backup); await mkdir(g.file);
   await assert.rejects(g.j.draw({ requestId: 'disk-retry', theme: 'garden' }), code('PERSISTENCE_FAILED'));
   assert.deepEqual(g.j.snapshot(), state); assert.equal(await readFile(backup, 'utf8'), old); assert.equal(g.j.drawReceipt('disk-retry'), null);
@@ -213,7 +221,7 @@ test('RNG failure and disk replacement failure roll back charge, ownership and r
 });
 
 test('corrupt version two collection accounting, ownership or draw evidence preserves original bytes', async t => {
-  const f = await fixture(t); await f.earn(); await f.j.draw({ requestId: 'corruption-baseline', theme: 'xianxia' }); await f.j.close();
+  const f = await fixture(t); await f.j.preferences({ theme: 'xianxia' }); await f.earn(); await f.j.draw({ requestId: 'corruption-baseline', theme: 'xianxia' }); await f.j.close();
   const good = JSON.parse(await readFile(f.file, 'utf8'));
   for (const corrupt of [data => { data.collection.points.balance++; }, data => { data.collection.owned[0].count++; }, data => { data.collection.draws[0].results[0].isNew = false; }, data => { data.collection.characters[0].name = 'forged builtin'; }, data => { data.collection.characters.pop(); }, data => { data.equipment.character = 'unowned'; }]) {
     const data = structuredClone(good); corrupt(data); const bytes = JSON.stringify(data); await writeFile(f.file, bytes);
@@ -243,7 +251,7 @@ test('real rc.3 v1 migration retains awards, requests, unknown progress and equi
   const replay = await journal.report({ requestId: 'legacy-report', definitionId: 'legacy-kept' }, { source: 'user' });
   assert.equal(replay.revision, before.revision); assert.deepEqual(replay.notifications, []); assert.equal(replay.collection.points.earned, 2);
   const saved = JSON.parse(await readFile(file, 'utf8')); assert.deepEqual(saved.facts, before.facts); assert.deepEqual(saved.requests, before.requests);
-  await journal.draw({ requestId: 'after-migration', theme: 'wuxia' }); await journal.close();
+  await journal.preferences({ theme: 'wuxia' }); await journal.draw({ requestId: 'after-migration', theme: 'wuxia' }); await journal.close();
   journal = await createJournal({ file, now: () => 6000 }); assert.deepEqual(journal.snapshot().awards, before.awards); assert.deepEqual(journal.snapshot().collection.points, { earned: 2, spent: 1, balance: 1 }); assert.deepEqual(journal.snapshot().notifications, []);
 });
 

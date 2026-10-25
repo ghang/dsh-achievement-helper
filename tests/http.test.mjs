@@ -66,6 +66,7 @@ test('host retains corrupt archives, refuses live writers and recovers only a pr
   await (await import('node:fs/promises')).writeFile(options.statePath, '{corrupt-data');
   const corrupt = await createAchievementJournal(ctx, options); services.push(corrupt);
   assert.equal(corrupt.snapshot().storage.status, 'unavailable'); assert.equal(await readFile(options.statePath, 'utf8'), '{corrupt-data');
+  await assert.rejects(corrupt.mutate('deleteDefinitions', { requestId: 'delete-from-unavailable', ids: ['custom'] }), { status: 503, code: 'JOURNAL_STORAGE' });
   await (await import('node:fs/promises')).writeFile(options.statePath, bytes);
   const exited = spawnSync(process.execPath, ['-e', 'process.exit(0)']); assert.equal(exited.status, 0);
   await (await import('node:fs/promises')).writeFile(options.statePath + '.lock', JSON.stringify({ pid: exited.pid, token: 'known-dead-test', at: 0 }));

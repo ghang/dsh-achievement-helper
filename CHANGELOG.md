@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0-rc.3
+
+Add an exact achievement generation count (1–6, default 3) and deletion of
+custom goals while retaining earned records, point spending and durable
+identities. Unify theme selection across achievements, character collection,
+generation and debug draws; hide other-theme results and equipment until
+switching back. Present built-in character names as genre ranks and professions
+without rewriting archived canonical cards. Keep schema 2 and existing images.
+Recover draws rejected before commit and retain original generation requests
+when a start response is uncertain, avoiding accidental duplicate model work.
+New artwork is being reviewed as a separate four-style comparison.
+
 ## 0.2.0-rc.2
 
 Rename the setup tab to “自定义生成” without changing generation flow. Replace

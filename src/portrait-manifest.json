@@ -10,56 +10,56 @@
       "characters": [
         {
           "id": "builtin:explorer:1",
-          "name": "森径信使",
+          "name": "见习旅人",
           "icon": "leaf",
           "column": 0,
           "row": 0
         },
         {
           "id": "builtin:explorer:2",
-          "name": "砂岩画师",
+          "name": "初级探险家",
           "icon": "book",
           "column": 1,
           "row": 0
         },
         {
           "id": "builtin:explorer:3",
-          "name": "云谷背包客",
+          "name": "地图学徒",
           "icon": "compass",
           "column": 2,
           "row": 0
         },
         {
           "id": "builtin:explorer:4",
-          "name": "寻星观测员",
+          "name": "荒野向导",
           "icon": "star",
           "column": 3,
           "row": 0
         },
         {
           "id": "builtin:explorer:5",
-          "name": "极光领航员",
+          "name": "资深探险家",
           "icon": "flag",
           "column": 0,
           "row": 1
         },
         {
           "id": "builtin:explorer:6",
-          "name": "旧图修补匠",
+          "name": "遗迹学者",
           "icon": "book",
           "column": 1,
           "row": 1
         },
         {
           "id": "builtin:explorer:7",
-          "name": "山海绘卷师",
+          "name": "远征领队",
           "icon": "medal",
           "column": 2,
           "row": 1
         },
         {
           "id": "builtin:explorer:8",
-          "name": "黎明远行者",
+          "name": "传奇探险家",
           "icon": "compass",
           "column": 3,
           "row": 1
@@ -79,56 +79,56 @@
       "characters": [
         {
           "id": "builtin:xianxia:1",
-          "name": "青苔童子",
+          "name": "练气小修",
           "icon": "leaf",
           "column": 0,
           "row": 0
         },
         {
           "id": "builtin:xianxia:2",
-          "name": "灵泉采药人",
+          "name": "练气修士",
           "icon": "lotus",
           "column": 1,
           "row": 0
         },
         {
           "id": "builtin:xianxia:3",
-          "name": "松烟符徒",
+          "name": "练气剑修",
           "icon": "book",
           "column": 2,
           "row": 0
         },
         {
           "id": "builtin:xianxia:4",
-          "name": "听雨剑修",
+          "name": "筑基修士",
           "icon": "sword",
           "column": 3,
           "row": 0
         },
         {
           "id": "builtin:xianxia:5",
-          "name": "白羽丹师",
+          "name": "筑基剑修",
           "icon": "orb",
           "column": 0,
           "row": 1
         },
         {
           "id": "builtin:xianxia:6",
-          "name": "逐月灵狐",
+          "name": "筑基丹师",
           "icon": "fox",
           "column": 1,
           "row": 1
         },
         {
           "id": "builtin:xianxia:7",
-          "name": "莲台御风客",
+          "name": "结丹真人",
           "icon": "lotus",
           "column": 2,
           "row": 1
         },
         {
           "id": "builtin:xianxia:8",
-          "name": "九霄星君",
+          "name": "元婴大能",
           "icon": "dragon",
           "column": 3,
           "row": 1
@@ -148,56 +148,56 @@
       "characters": [
         {
           "id": "builtin:cyber:1",
-          "name": "巷灯巡线员",
+          "name": "街区新人",
           "icon": "code",
           "column": 0,
           "row": 0
         },
         {
           "id": "builtin:cyber:2",
-          "name": "字节园丁",
+          "name": "见习网行者",
           "icon": "leaf",
           "column": 1,
           "row": 0
         },
         {
           "id": "builtin:cyber:3",
-          "name": "回声信使",
+          "name": "初级技师",
           "icon": "chat",
           "column": 2,
           "row": 0
         },
         {
           "id": "builtin:cyber:4",
-          "name": "霓虹译码师",
+          "name": "网络佣兵",
           "icon": "code",
           "column": 3,
           "row": 0
         },
         {
           "id": "builtin:cyber:5",
-          "name": "银翼守夜人",
+          "name": "资深网行者",
           "icon": "robot",
           "column": 0,
           "row": 1
         },
         {
           "id": "builtin:cyber:6",
-          "name": "合成猫侦探",
+          "name": "义体专家",
           "icon": "cat",
           "column": 1,
           "row": 1
         },
         {
           "id": "builtin:cyber:7",
-          "name": "量子观测者",
+          "name": "精英黑客",
           "icon": "orb",
           "column": 2,
           "row": 1
         },
         {
           "id": "builtin:cyber:8",
-          "name": "黎明协议主",
+          "name": "都市传说",
           "icon": "robot",
           "column": 3,
           "row": 1
@@ -217,56 +217,56 @@
       "characters": [
         {
           "id": "builtin:wuxia:1",
-          "name": "竹篱药童",
+          "name": "武馆学徒",
           "icon": "leaf",
           "column": 0,
           "row": 0
         },
         {
           "id": "builtin:wuxia:2",
-          "name": "渡口说书人",
+          "name": "江湖新人",
           "icon": "book",
           "column": 1,
           "row": 0
         },
         {
           "id": "builtin:wuxia:3",
-          "name": "青衫镖客",
+          "name": "练武弟子",
           "icon": "flag",
           "column": 2,
           "row": 0
         },
         {
           "id": "builtin:wuxia:4",
-          "name": "听雪剑客",
+          "name": "入门剑客",
           "icon": "sword",
           "column": 3,
           "row": 0
         },
         {
           "id": "builtin:wuxia:5",
-          "name": "流霞琴师",
+          "name": "成名侠客",
           "icon": "lotus",
           "column": 0,
           "row": 1
         },
         {
           "id": "builtin:wuxia:6",
-          "name": "归雁游侠",
+          "name": "门派高手",
           "icon": "feather",
           "column": 1,
           "row": 1
         },
         {
           "id": "builtin:wuxia:7",
-          "name": "踏月刀隐",
+          "name": "一代宗师",
           "icon": "moon",
           "column": 2,
           "row": 1
         },
         {
           "id": "builtin:wuxia:8",
-          "name": "无尘宗师",
+          "name": "武林泰斗",
           "icon": "sword",
           "column": 3,
           "row": 1
@@ -286,56 +286,56 @@
       "characters": [
         {
           "id": "builtin:fantasy:1",
-          "name": "苔原侏儒",
+          "name": "村庄学徒",
           "icon": "gear",
           "column": 0,
           "row": 0
         },
         {
           "id": "builtin:fantasy:2",
-          "name": "烛光学徒",
+          "name": "见习冒险者",
           "icon": "lantern",
           "column": 1,
           "row": 0
         },
         {
           "id": "builtin:fantasy:3",
-          "name": "铃鹿斥候",
+          "name": "初级法师",
           "icon": "leaf",
           "column": 2,
           "row": 0
         },
         {
           "id": "builtin:fantasy:4",
-          "name": "银叶德鲁伊",
+          "name": "王国骑士",
           "icon": "leaf",
           "column": 3,
           "row": 0
         },
         {
           "id": "builtin:fantasy:5",
-          "name": "星火骑士",
+          "name": "高阶法师",
           "icon": "sword",
           "column": 0,
           "row": 1
         },
         {
           "id": "builtin:fantasy:6",
-          "name": "月泉魔导师",
+          "name": "圣殿骑士",
           "icon": "orb",
           "column": 1,
           "row": 1
         },
         {
           "id": "builtin:fantasy:7",
-          "name": "秘境龙语者",
+          "name": "大魔导师",
           "icon": "book",
           "column": 2,
           "row": 1
         },
         {
           "id": "builtin:fantasy:8",
-          "name": "晨曦守誓龙",
+          "name": "传奇英雄",
           "icon": "dragon",
           "column": 3,
           "row": 1
@@ -355,56 +355,56 @@
       "characters": [
         {
           "id": "builtin:space:1",
-          "name": "舷窗记录员",
+          "name": "太空学员",
           "icon": "book",
           "column": 0,
           "row": 0
         },
         {
           "id": "builtin:space:2",
-          "name": "陨石采样员",
+          "name": "见习宇航员",
           "icon": "orb",
           "column": 1,
           "row": 0
         },
         {
           "id": "builtin:space:3",
-          "name": "轨道修理工",
+          "name": "轨道技师",
           "icon": "gear",
           "column": 2,
           "row": 0
         },
         {
           "id": "builtin:space:4",
-          "name": "苍蓝导航官",
+          "name": "星舰领航员",
           "icon": "compass",
           "column": 3,
           "row": 0
         },
         {
           "id": "builtin:space:5",
-          "name": "深空信号师",
+          "name": "资深宇航员",
           "icon": "chat",
           "column": 0,
           "row": 1
         },
         {
           "id": "builtin:space:6",
-          "name": "星尘测绘员",
+          "name": "星舰舰长",
           "icon": "star",
           "column": 1,
           "row": 1
         },
         {
           "id": "builtin:space:7",
-          "name": "折光跃迁者",
+          "name": "舰队指挥官",
           "icon": "ship",
           "column": 2,
           "row": 1
         },
         {
           "id": "builtin:space:8",
-          "name": "群星引航者",
+          "name": "星际元帅",
           "icon": "ship",
           "column": 3,
           "row": 1
@@ -424,56 +424,56 @@
       "characters": [
         {
           "id": "builtin:ocean:1",
-          "name": "潮汐拾贝人",
+          "name": "甲板学徒",
           "icon": "shell",
           "column": 0,
           "row": 0
         },
         {
           "id": "builtin:ocean:2",
-          "name": "珊瑚信使",
+          "name": "见习水手",
           "icon": "chat",
           "column": 1,
           "row": 0
         },
         {
           "id": "builtin:ocean:3",
-          "name": "礁影潜行者",
+          "name": "潜水员",
           "icon": "compass",
           "column": 2,
           "row": 0
         },
         {
           "id": "builtin:ocean:4",
-          "name": "月湾领航员",
+          "name": "航海士",
           "icon": "ship",
           "column": 3,
           "row": 0
         },
         {
           "id": "builtin:ocean:5",
-          "name": "珍珠守望者",
+          "name": "远洋船长",
           "icon": "orb",
           "column": 0,
           "row": 1
         },
         {
           "id": "builtin:ocean:6",
-          "name": "海雾歌者",
+          "name": "深海学者",
           "icon": "shell",
           "column": 1,
           "row": 1
         },
         {
           "id": "builtin:ocean:7",
-          "name": "蓝渊探秘师",
+          "name": "舰队提督",
           "icon": "medal",
           "column": 2,
           "row": 1
         },
         {
           "id": "builtin:ocean:8",
-          "name": "万潮御鲸者",
+          "name": "海洋领主",
           "icon": "dragon",
           "column": 3,
           "row": 1
@@ -493,56 +493,56 @@
       "characters": [
         {
           "id": "builtin:garden:1",
-          "name": "晨露植苗员",
+          "name": "园艺学徒",
           "icon": "leaf",
           "column": 0,
           "row": 0
         },
         {
           "id": "builtin:garden:2",
-          "name": "青叶邮差",
+          "name": "见习花匠",
           "icon": "chat",
           "column": 1,
           "row": 0
         },
         {
           "id": "builtin:garden:3",
-          "name": "小径蘑菇匠",
+          "name": "育苗员",
           "icon": "flower",
           "column": 2,
           "row": 0
         },
         {
           "id": "builtin:garden:4",
-          "name": "月季调香师",
+          "name": "园艺师",
           "icon": "flower",
           "column": 3,
           "row": 0
         },
         {
           "id": "builtin:garden:5",
-          "name": "蕨影护林人",
+          "name": "资深花匠",
           "icon": "leaf",
           "column": 0,
           "row": 1
         },
         {
           "id": "builtin:garden:6",
-          "name": "蜂语花匠",
+          "name": "植物学家",
           "icon": "spark",
           "column": 1,
           "row": 1
         },
         {
           "id": "builtin:garden:7",
-          "name": "流萤造景师",
+          "name": "园林大师",
           "icon": "lantern",
           "column": 2,
           "row": 1
         },
         {
           "id": "builtin:garden:8",
-          "name": "四季森灵",
+          "name": "自然守护者",
           "icon": "flower",
           "column": 3,
           "row": 1
@@ -562,56 +562,56 @@
       "characters": [
         {
           "id": "builtin:academy:1",
-          "name": "墨羽抄录生",
+          "name": "预科学徒",
           "icon": "feather",
           "column": 0,
           "row": 0
         },
         {
           "id": "builtin:academy:2",
-          "name": "钟楼值日生",
+          "name": "初级学员",
           "icon": "gear",
           "column": 1,
           "row": 0
         },
         {
           "id": "builtin:academy:3",
-          "name": "银页图书员",
+          "name": "图书助理",
           "icon": "book",
           "column": 2,
           "row": 0
         },
         {
           "id": "builtin:academy:4",
-          "name": "星算研究员",
+          "name": "正式学者",
           "icon": "star",
           "column": 3,
           "row": 0
         },
         {
           "id": "builtin:academy:5",
-          "name": "烛台辩论家",
+          "name": "高阶研究员",
           "icon": "lantern",
           "column": 0,
           "row": 1
         },
         {
           "id": "builtin:academy:6",
-          "name": "羽笔咒学师",
+          "name": "学科教授",
           "icon": "feather",
           "column": 1,
           "row": 1
         },
         {
           "id": "builtin:academy:7",
-          "name": "万卷巡阅者",
+          "name": "学院贤者",
           "icon": "owl",
           "column": 2,
           "row": 1
         },
         {
           "id": "builtin:academy:8",
-          "name": "穹顶贤者",
+          "name": "首席院长",
           "icon": "book",
           "column": 3,
           "row": 1
@@ -631,56 +631,56 @@
       "characters": [
         {
           "id": "builtin:steampunk:1",
-          "name": "煤灯调试员",
+          "name": "车间学徒",
           "icon": "lantern",
           "column": 0,
           "row": 0
         },
         {
           "id": "builtin:steampunk:2",
-          "name": "铜壳跑腿机",
+          "name": "见习技工",
           "icon": "robot",
           "column": 1,
           "row": 0
         },
         {
           "id": "builtin:steampunk:3",
-          "name": "铆钉制图生",
+          "name": "装配技师",
           "icon": "book",
           "column": 2,
           "row": 0
         },
         {
           "id": "builtin:steampunk:4",
-          "name": "黄铜飞艇长",
+          "name": "机械工程师",
           "icon": "ship",
           "column": 3,
           "row": 0
         },
         {
           "id": "builtin:steampunk:5",
-          "name": "齿轮钟匠",
+          "name": "高级机匠",
           "icon": "gear",
           "column": 0,
           "row": 1
         },
         {
           "id": "builtin:steampunk:6",
-          "name": "蒸汽花园师",
+          "name": "飞艇舰长",
           "icon": "flower",
           "column": 1,
           "row": 1
         },
         {
           "id": "builtin:steampunk:7",
-          "name": "逆风机械师",
+          "name": "首席工程师",
           "icon": "gear",
           "column": 2,
           "row": 1
         },
         {
           "id": "builtin:steampunk:8",
-          "name": "永昼动力心",
+          "name": "发明大师",
           "icon": "orb",
           "column": 3,
           "row": 1

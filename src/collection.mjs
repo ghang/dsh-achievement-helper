@@ -35,7 +35,32 @@ const NAMES = Object.freeze({
   academy: [['墨羽抄录生', 'feather', 'float'], ['钟楼值日生', 'gear', 'none'], ['银页图书员', 'book', 'pulse'], ['星算研究员', 'star', 'orbit'], ['烛台辩论家', 'lantern', 'pulse'], ['羽笔咒学师', 'feather', 'float'], ['万卷巡阅者', 'owl', 'orbit'], ['穹顶贤者', 'book', 'spark']],
   steampunk: [['煤灯调试员', 'lantern', 'pulse'], ['铜壳跑腿机', 'robot', 'float'], ['铆钉制图生', 'book', 'none'], ['黄铜飞艇长', 'ship', 'float'], ['齿轮钟匠', 'gear', 'orbit'], ['蒸汽花园师', 'flower', 'pulse'], ['逆风机械师', 'gear', 'orbit'], ['永昼动力心', 'orb', 'spark']],
 });
+// Presentation only. NAMES/BUILTINS below remain the original schema-2
+// canonical records, so loading a prior archive never renames stored cards.
+export const CHARACTER_THEME_NAMES = Object.freeze(Object.fromEntries(Object.entries({
+  explorer: ['见习旅人', '初级探险家', '地图学徒', '荒野向导', '资深探险家', '遗迹学者', '远征领队', '传奇探险家'],
+  xianxia: ['练气小修', '练气修士', '练气剑修', '筑基修士', '筑基剑修', '筑基丹师', '结丹真人', '元婴大能'],
+  cyber: ['街区新人', '见习网行者', '初级技师', '网络佣兵', '资深网行者', '义体专家', '精英黑客', '都市传说'],
+  wuxia: ['武馆学徒', '江湖新人', '练武弟子', '入门剑客', '成名侠客', '门派高手', '一代宗师', '武林泰斗'],
+  fantasy: ['村庄学徒', '见习冒险者', '初级法师', '王国骑士', '高阶法师', '圣殿骑士', '大魔导师', '传奇英雄'],
+  space: ['太空学员', '见习宇航员', '轨道技师', '星舰领航员', '资深宇航员', '星舰舰长', '舰队指挥官', '星际元帅'],
+  ocean: ['甲板学徒', '见习水手', '潜水员', '航海士', '远洋船长', '深海学者', '舰队提督', '海洋领主'],
+  garden: ['园艺学徒', '见习花匠', '育苗员', '园艺师', '资深花匠', '植物学家', '园林大师', '自然守护者'],
+  academy: ['预科学徒', '初级学员', '图书助理', '正式学者', '高阶研究员', '学科教授', '学院贤者', '首席院长'],
+  steampunk: ['车间学徒', '见习技工', '装配技师', '机械工程师', '高级机匠', '飞艇舰长', '首席工程师', '发明大师'],
+}).map(([theme, names]) => [theme, Object.freeze(names)])));
 const BUILTINS = THEME_IDS.flatMap((theme, themeIndex) => NAMES[theme].map(([name, icon, animation], index) => ({ id: `builtin:${theme}:${index + 1}`, name, description: `来自${LABELS[themeIndex]}旅途的${name}，与你一起收藏真实经历。`, theme, rarity: ['N', 'N', 'N', 'R', 'R', 'R', 'SR', 'SSR'][index], icon, animation, source: 'builtin' })));
+export function presentCollection(collection) {
+  const result = clone(collection);
+  for (const character of result.characters) {
+    if (character.source !== 'builtin') continue;
+    const index = BUILTINS.findIndex(item => item.id === character.id);
+    if (index < 0) continue;
+    const name = CHARACTER_THEME_NAMES[character.theme][index % 8];
+    character.name = name; character.description = `${LABELS[THEME_IDS.indexOf(character.theme)]}题材中的${name}，与你一起收藏真实经历。`;
+  }
+  return result;
+}
 
 // These titles describe the same sixteen canonical conditions in seven new
 // presentation themes; historical award snapshots are never rewritten.
@@ -54,7 +79,7 @@ export const ACHIEVEMENT_THEME_TITLES = Object.freeze(Object.fromEntries(Object.
 export function collectionCatalog() {
   return clone({ themeIds: THEME_IDS, themes: THEME_IDS.map((id, index) => ({ id, label: LABELS[index] })), rarities: RARITIES, iconIds: ICON_IDS, animationIds: ANIMATION_IDS, animations: ANIMATION_IDS, drawSize: 10, drawCost: 1,
     baseRates: BASE_RATES, actualRates: ACTUAL_RATES, rates: { base: BASE_RATES, actual: ACTUAL_RATES, actualBasis: 'average_per_card_after_ten_pull_guarantee', characterSelection: 'uniform_within_theme_and_rarity' },
-    guarantee: { drawSize: 10, minimumRarity: 'SR', rerollPosition: 10, rerollRates: { SR: 10 / 12, SSR: 2 / 12 }, condition: 'If all ten base rolls are N/R, reroll the tenth rarity as SR/SSR with weights 10:2.' }, frameStyles: FRAME_STYLES, limits: COLLECTION_LIMITS, pointsRule: 'One point per unique permanent award; one point buys exactly ten characters. Duplicates increase ownership count.' });
+    guarantee: { drawSize: 10, minimumRarity: 'SR', rerollPosition: 10, rerollRates: { SR: 10 / 12, SSR: 2 / 12 }, condition: 'If all ten base rolls are N/R, reroll the tenth rarity as SR/SSR with weights 10:2.' }, themeNaming: { style: 'profession_or_rank', byTheme: CHARACTER_THEME_NAMES, instructions: '优先使用所选题材常见等级或职业，可加职业后缀区分；尊重用户明确指定的名字。' }, frameStyles: FRAME_STYLES, limits: COLLECTION_LIMITS, pointsRule: 'One point per unique permanent award; one point buys exactly ten characters. Duplicates increase ownership count.' });
 }
 export function freshCollection(at, awards = []) {
   const earned = new Set(awards.map(award => award.id)).size;
@@ -79,7 +104,7 @@ export function validateArt(value) {
   if (!magic) fail('INVALID_ART', 'Image magic does not match its declared raster type.');
   return { value, bytes: bytes.length };
 }
-export function configureCollectionCharacters(collection, items, { requestHash, source, at }) {
+export function configureCollectionCharacters(collection, items, { requestHash, source, at, defaultTheme }) {
   if (!Array.isArray(items) || items.length < 1 || items.length > COLLECTION_LIMITS.characterBatch) fail('INVALID_INPUT', 'Configure between one and twenty characters.');
   const touched = new Set();
   for (const [index, item] of items.entries()) {
@@ -88,7 +113,7 @@ export function configureCollectionCharacters(collection, items, { requestHash, 
     if (touched.has(id)) fail('INVALID_INPUT', 'A batch cannot repeat a character identity.'); touched.add(id);
     const old = collection.characters.find(character => character.id === id);
     if (old?.source === 'builtin' || id.startsWith('builtin:')) fail('BUILTIN_CHARACTER_IMMUTABLE', 'Built-in characters cannot be replaced.', 409);
-    const theme = option(item.theme ?? old?.theme, THEME_IDS), rarity = option(item.rarity ?? old?.rarity, RARITIES);
+    const theme = option(item.theme ?? old?.theme ?? defaultTheme, THEME_IDS), rarity = option(item.rarity ?? old?.rarity, RARITIES);
     if (old && collection.owned.some(owned => owned.id === id) && (theme !== old.theme || rarity !== old.rarity)) fail('CHARACTER_POOL_IMMUTABLE', 'An owned character keeps its original theme and rarity.', 409);
     const character = { id, name: text(item.name ?? old?.name, 60), description: text(item.description ?? old?.description, 240, '与你一同记录旅途的原创角色。'), theme, rarity,
       icon: option(item.icon ?? old?.icon ?? 'star', ICON_IDS), animation: option(item.animation ?? old?.animation ?? 'none', ANIMATION_IDS), source: old?.source ?? option(source, ['model', 'user']), revision: (old?.revision ?? 0) + 1, createdAt: old?.createdAt ?? at, updatedAt: at };

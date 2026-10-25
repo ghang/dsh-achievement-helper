@@ -33,11 +33,12 @@ function harness(initial = journal(), options = {}) {
   const timers = new Map(), frames = new Map(), requests = [], records = [], effects = [], cleanupCallbacks = [];
   const documentEvents = new Map(), windowEvents = new Map(), copied = [];
   const sessionListeners = new Set();
-  const mediaListeners = new Set(), storage = options.storage ?? new Map(), drawReceipts = new Map();
+  const mediaListeners = new Set(), storage = options.storage ?? new Map(), drawReceipts = new Map(), generationReceipts = new Map();
   const debugStates = new Map();
-  const debugTemplate = options.debugTemplate ?? journal({ definitions: [definition()], collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [character()], owned: [], draws: [] } });
-  const server = { state: clone(initial), sessionKey: options.sessionKey, uiSessionGetterReads: 0, wide: true, job: options.job ? clone(options.job) : null, failGenerationStart: null, failGenerationGet: null,
-    drawWrites: 0, failDrawAfterCommit: false, systemReduce: false, canvasDraws: 0,
+  const debugTemplate = options.debugTemplate ?? journal({ definitions: [definition()], collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: ['explorer', 'xianxia', 'cyber', 'wuxia', 'fantasy', 'space', 'ocean', 'garden', 'academy', 'steampunk'].map(theme => character({ id: theme === 'explorer' ? 'hero' : 'hero-' + theme, theme })), owned: [], draws: [] } });
+  const server = { state: clone(initial), sessionKey: options.sessionKey, uiSessionGetterReads: 0, wide: true, job: options.job ? clone(options.job) : null, failGenerationStart: null, failGenerationStartCode: 'GENERATION_UNAVAILABLE', failGenerationGet: null,
+    generationWrites: 0, failGenerationAfterCommit: false, failGenerationAfterCommitCode: null,
+    drawWrites: 0, failDrawAfterCommit: false, failDrawAfterCommitCode: null, systemReduce: false, canvasDraws: 0,
     debugStates, ignoreStateAbort: false, imageErrors: new Set(options.imageErrors ?? []),
     failState: null, hangState: false, deferNextState: false, failPost: null, failCatalog: null,
     catalog: { metrics: [{ id: 'tokens' }, { id: 'file_read' }, { id: 'recipe' }], templates: ['count', 'model_report'], equipment: { charms: ['compass', 'star', 'leaf'] },
@@ -146,9 +147,21 @@ function harness(initial = journal(), options = {}) {
       if (server.failGenerationGet) return { ok: false, status: 503, json: async () => ({ error: server.failGenerationGet }) };
       response = { job: token ? null : clone(server.job) };
     } else if (path === '/generation' && options.method === 'POST') {
-      if (server.failGenerationStart) return { ok: false, status: 503, json: async () => ({ error: server.failGenerationStart }) };
-      server.job = { id: `job-${++nextId}`, kind: JSON.parse(options.body).kind || 'achievements', status: 'running', stage: 'analyzing', message: '正在分析所选数据', createdAt: 100, updatedAt: 100, createdDefinitionIds: [], createdCharacterIds: [], usageSource: 'auxiliary_generation' };
-      response = { job: clone(server.job) };
+      if (server.failGenerationStart) return { ok: false, status: 503, json: async () => ({ code: server.failGenerationStartCode, error: server.failGenerationStart }) };
+      const body = JSON.parse(options.body), previous = generationReceipts.get(body.requestId);
+      if (previous) {
+        if (previous.body !== options.body) return { ok: false, status: 409, json: async () => ({ code: 'GENERATION_REQUEST_ID_REUSED', error: '原请求参数不得改变' }) };
+        response = { job: clone(previous.job) };
+      } else {
+        if (body.theme !== target.preferences.theme) return { ok: false, status: 409, json: async () => ({ code: 'GENERATION_THEME_MISMATCH', error: '请使用当前全局主题' }) };
+        server.job = { id: `job-${++nextId}`, kind: body.kind || 'achievements', count: body.count, status: 'running', stage: 'analyzing', message: '正在分析所选数据', createdAt: 100, updatedAt: 100, createdDefinitionIds: [], createdCharacterIds: [], usageSource: 'auxiliary_generation' };
+        server.generationWrites += 1;
+        if (server.failGenerationAfterCommit || server.failGenerationAfterCommitCode) server.job = { ...server.job, status: 'succeeded', stage: 'done', updatedAt: 200 };
+        generationReceipts.set(body.requestId, { body: options.body, job: clone(server.job) });
+        if (server.failGenerationAfterCommitCode) { const code = server.failGenerationAfterCommitCode; server.failGenerationAfterCommitCode = null; return { ok: false, status: 503, json: async () => ({ code, error: '生成启动持久性尚未确认' }) }; }
+        if (server.failGenerationAfterCommit) { server.failGenerationAfterCommit = false; throw new Error('connection lost after accepted generation'); }
+        response = { job: clone(server.job) };
+      }
     } else if (path === '/generation/cancel') {
       assert.notEqual(server.job?.stage, 'applying');
       server.job = { ...server.job, status: 'cancelled', stage: 'done', message: '已取消生成', updatedAt: server.job.updatedAt + 1 };
@@ -156,7 +169,8 @@ function harness(initial = journal(), options = {}) {
     } else if (path === '/draw') {
       const body = JSON.parse(options.body);
       if (!drawReceipts.has(body.requestId)) {
-        if (target.collection.points.balance < 1) return { ok: false, status: 409, json: async () => ({ error: '成就点不足' }) };
+        if (body.theme !== target.preferences.theme) return { ok: false, status: 409, json: async () => ({ code: 'THEME_MISMATCH', error: '抽卡主题已变化，请使用当前全局主题重新发起抽卡。' }) };
+        if (target.collection.points.balance < 1) return { ok: false, status: 409, json: async () => ({ code: 'NOT_ENOUGH_POINTS', error: '成就点不足' }) };
         const item = target.collection.characters.find(item => item.theme === body.theme);
         assert.ok(item, 'Draw fixture needs a character in the requested theme');
         const existing = target.collection.owned.find(entry => entry.id === item.id);
@@ -164,6 +178,7 @@ function harness(initial = journal(), options = {}) {
         drawReceipts.set(body.requestId, receipt); target.collection.draws.push(receipt);
         if (existing) existing.count += 10; else target.collection.owned.push({ id: item.id, count: 10, firstAt: 200 });
         target.collection.points.spent += 1; target.collection.points.balance -= 1; target.revision += 1; server.drawWrites += 1;
+        if (server.failDrawAfterCommitCode) { const code = server.failDrawAfterCommitCode; server.failDrawAfterCommitCode = null; return { ok: false, status: 503, json: async () => ({ code, error: '写入已发生，但磁盘持久性尚未确认' }) }; }
         if (server.failDrawAfterCommit) { server.failDrawAfterCommit = false; throw new Error('connection lost after commit'); }
       }
       response = { ...decorate(target), draw: clone(drawReceipts.get(body.requestId)) };
@@ -177,6 +192,7 @@ function harness(initial = journal(), options = {}) {
         else target.equipment.badges = body.equipped === false ? [] : [body.id];
       }
       if (path === '/configure') target.definitions = target.definitions.map(item => body.archiveIds?.includes(item.id) ? { ...item, status: 'archived' } : item);
+      if (path === '/delete') target.definitions = target.definitions.map(item => body.ids?.includes(item.id) ? { ...item, status: 'archived' } : item);
       if (path === '/characters') for (const declared of body.characters) {
         const previous = target.collection.characters.find(item => item.id === declared.id);
         if (previous) Object.assign(previous, declared);
@@ -359,7 +375,8 @@ test('reconnect during an older in-flight request establishes a fresh server wat
 
 test('preferences and equipment save through the API and failures preserve the saved state', async t => {
   const app = harness(); t.after(() => app.cleanup()); await app.ready();
-  app.change('daj-settings-theme', 'xianxia'); await app.ready();
+  app.click('打开成就中心');
+  app.change('daj-global-theme', 'xianxia'); await app.ready();
   assert.equal(app.state().data.preferences.theme, 'xianxia');
   app.change('daj-settings-charm', 'leaf'); await app.ready();
   assert.equal(app.state().data.equipment.charm, 'leaf');
@@ -377,7 +394,7 @@ test('one-click generation submits selected real sources and applies only the su
   assert.doesNotMatch(app.textContent(), /复制给模型|粘贴发送/);
   assert.ok(!app.nodes().some(node => node.props?.id === 'daj-metric-recipe'));
   app.change('daj-metric-tokens', false);
-  app.change('daj-generation-theme', 'cyber'); app.change('daj-generation-direction', '城市夜航');
+  app.change('daj-global-theme', 'cyber'); await app.ready(); app.change('daj-generation-direction', '城市夜航');
   app.nodes().find(node => node.type === 'input' && node.props.type === 'radio' && node.props.value === 'discovery').props.onChange(); app.render();
   app.click('分析并生成成就'); await app.ready();
   const submitted = JSON.parse(app.requests.find(item => item.url.endsWith('/generation') && item.options.method === 'POST').options.body);
@@ -470,7 +487,8 @@ test('footer decoration is a small native strip and collapses to one icon', asyn
 test('ten themes and frame height previews stay local until saving and preserve earned records', async t => {
   const award = { id: 'award-1', definitionId: 'first-read', at: 3, title: '第一眼', source: 'automatic' };
   const app = harness(journal({ awards: [award] })); t.after(() => app.cleanup()); await app.ready();
-  const themeField = app.nodes().find(node => node.props?.id === 'daj-settings-theme');
+  app.click('打开成就中心');
+  const themeField = app.nodes().find(node => node.props?.id === 'daj-global-theme');
   assert.equal(app.nodes(themeField).filter(node => node.type === 'option').length, 10);
   const writes = app.requests.filter(item => item.options.method === 'POST').length;
   app.click('展示 104px'); app.change('daj-settings-frame-height', '145');
@@ -480,7 +498,7 @@ test('ten themes and frame height previews stay local until saving and preserve 
   assert.equal(app.state().data.preferences.frameStyle, 'showcase'); assert.equal(app.state().data.preferences.frameHeight, 145);
   assert.equal(app.nodes().find(node => node.type === 'button' && node.props.className?.includes('daj-profile-strip')).props.style.height, '145px');
   for (const selected of ['wuxia', 'fantasy', 'space', 'ocean', 'garden', 'academy', 'steampunk']) {
-    app.change('daj-settings-theme', selected); await app.ready(); assert.equal(app.state().data.preferences.theme, selected);
+    app.change('daj-global-theme', selected); await app.ready(); assert.equal(app.state().data.preferences.theme, selected);
     assert.equal(app.state().data.awards.length, 1);
   }
 });
@@ -494,11 +512,16 @@ test('zero point draw stays disabled and a committed network failure retries the
   await app.advance(1800); assert.equal(drawButton().props.disabled, false);
   app.server.failDrawAfterCommit = true; app.click('1 成就点 · 十连抽取'); await app.ready();
   assert.equal(app.server.drawWrites, 1); assert.ok(app.storage.has('dsh-achievement-journal.draw'));
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-global-theme').props.disabled, true);
+  const pendingRequests = app.requests.length;
+  app.change('daj-global-theme', 'garden'); await app.ready();
+  assert.equal(app.requests.length, pendingRequests); assert.equal(app.state().data.preferences.theme, 'explorer');
   app.cleanup(); await settle(); app.remount(); await app.ready(); app.click('打开成就中心'); app.click('角色收藏');
   assert.equal(app.state().data.collection.points.balance, 0); app.click('重试这次十连'); await app.ready();
   const draws = app.requests.filter(item => item.url.endsWith('/draw'));
-  assert.equal(draws.length, 2); assert.equal(JSON.parse(draws[0].options.body).requestId, JSON.parse(draws[1].options.body).requestId);
+  assert.equal(draws.length, 2); assert.deepEqual(JSON.parse(draws[0].options.body), JSON.parse(draws[1].options.body));
   assert.equal(app.server.drawWrites, 1); assert.equal(app.state().data.collection.points.spent, 1);
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-global-theme').props.disabled, false);
   assert.equal(app.state().drawReceipt.results.length, 10); assert.match(app.textContent(), /已收藏 10 份/);
   app.click('佩戴角色 山海小狐'); await app.ready(); assert.equal(app.state().data.equipment.character, 'hero');
   assert.ok(app.nodes().some(node => node.props?.['data-animation'] === 'float'));
@@ -509,8 +532,9 @@ test('zero point draw stays disabled and a committed network failure retries the
 });
 
 test('custom art validates MIME and header, joins the pool, and an owned custom appearance remains editable', async t => {
-  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏'); app.click('创作角色');
-  app.change('daj-character-name', '抱莲小狐'); app.change('daj-character-theme', 'garden'); app.change('daj-character-icon', 'lotus'); app.change('daj-character-animation', 'orbit');
+  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心');
+  app.change('daj-global-theme', 'garden'); await app.ready(); app.click('角色收藏'); app.click('创作角色');
+  app.change('daj-character-name', '抱莲小狐'); app.change('daj-character-icon', 'lotus'); app.change('daj-character-animation', 'orbit');
   const upload = file => app.nodes().find(node => node.props?.id === 'daj-character-art').props.onChange({ target: { files: [file] } });
   upload({ type: 'image/svg+xml', size: 12, dataURL: 'data:image/svg+xml;base64,PHN2Zz4=' }); app.render(); assert.match(app.textContent(), /PNG、JPEG、GIF/);
   upload({ type: 'image/png', size: 30, dataURL: PIXEL_GIF.replace('image/gif', 'image/png') }); await app.ready(); assert.match(app.textContent(), /内容与格式不匹配/);
@@ -520,7 +544,7 @@ test('custom art validates MIME and header, joins the pool, and an owned custom 
   app.click('返回角色收藏'); app.click('全部卡池'); assert.match(app.textContent(), /尚未获得 · 已在卡池/);
   app.server.state.collection.owned.push({ id: created.id, count: 2, firstAt: 20 }); app.server.state.revision += 1;
   await app.advance(1800); app.click('编辑角色 抱莲小狐');
-  assert.equal(app.nodes().find(node => node.props?.id === 'daj-character-theme').props.disabled, true);
+  assert.ok(!app.nodes().some(node => node.props?.id === 'daj-character-theme'));
   assert.equal(app.nodes().find(node => node.props?.id === 'daj-character-rarity').props.disabled, true);
   app.change('daj-character-name', '莲灯小狐'); app.change('daj-character-animation', 'pulse'); app.click('保存角色外观'); await app.ready();
   assert.equal(app.state().data.collection.characters.find(item => item.id === created.id).name, '莲灯小狐');
@@ -534,8 +558,9 @@ test('custom art validates MIME and header, joins the pool, and an owned custom 
 });
 
 test('model character generation omits achievement metrics and saves into the pool without granting ownership or points', async t => {
-  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏'); app.click('创作角色');
-  app.change('daj-character-generation-theme', 'xianxia'); app.change('daj-character-generation-direction', '莲灯灵狐'); app.click('模型生成角色'); await app.ready();
+  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心');
+  app.change('daj-global-theme', 'xianxia'); await app.ready(); app.click('角色收藏'); app.click('创作角色');
+  app.change('daj-character-generation-direction', '莲灯灵狐'); app.click('模型生成角色'); await app.ready();
   const submitted = JSON.parse(app.requests.find(item => item.url.endsWith('/generation') && item.options.method === 'POST').options.body);
   assert.equal(submitted.kind, 'characters'); assert.equal(submitted.theme, 'xianxia'); assert.equal('metrics' in submitted, false);
   app.server.state.collection.characters.push(character({ id: 'model-fox', name: '莲灯灵狐', theme: 'xianxia', source: 'model' })); app.server.state.revision += 1;
@@ -569,12 +594,13 @@ test('debug actions stay isolated, disable model requests, rotate reset tokens a
   assert.equal(app.requests.find(item => item.url.endsWith('/debug/start')).options.headers['x-daj-debug'], undefined);
   assert.ok(app.nodes().some(node => node.props?.className === 'daj-debug-banner'));
   assert.ok(app.nodes().some(node => node.props?.className === 'daj-frame-debug-label'));
-  app.change('daj-settings-theme', 'garden'); await app.ready();
+  app.click('打开成就中心');
+  app.change('daj-global-theme', 'garden'); await app.ready();
   assert.equal(app.server.debugStates.get(firstToken).preferences.theme, 'garden'); assert.equal(app.server.state.preferences.theme, 'explorer');
   app.click('完成所选成就'); await app.ready(); assert.equal(app.state().data.awards.length, 1);
   app.click('加一个挂件'); await app.ready(); assert.equal(app.state().data.equipment.charm, 'star');
   app.click('调试十连并佩戴'); await app.ready();
-  assert.equal(app.state().data.equipment.character, 'hero'); assert.equal(app.state().drawReceipt.results.length, 10);
+  assert.equal(app.state().data.equipment.character, 'hero-garden'); assert.equal(app.state().drawReceipt.results.length, 10);
   assert.equal(app.state().tab, 'characters'); assert.match(app.textContent(), /独立临时数据/);
   app.click('创作角色');
   const modelButton = app.nodes().find(node => node.type === 'button' && app.textContent(node).trim() === '模型生成角色');
@@ -591,7 +617,7 @@ test('debug actions stay isolated, disable model requests, rotate reset tokens a
 });
 
 test('expired debug scope remains explicit, prevents writes and never retries against real state', async t => {
-  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('进入调试模式'); await app.ready();
+  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('进入调试模式'); await app.ready();
   const token = app.storage.get('dsh-achievement-journal.debug'); app.server.debugStates.delete(token);
   const beforeExpiry = app.requests.length;
   await app.advance(1800); app.render();
@@ -599,11 +625,11 @@ test('expired debug scope remains explicit, prevents writes and never retries ag
   assert.equal(app.storage.get('dsh-achievement-journal.debug'), token);
   assert.match(app.textContent(), /未切回真实数据/);
   const beforeWrite = app.requests.length;
-  app.change('daj-settings-theme', 'cyber'); await app.ready();
+  app.change('daj-global-theme', 'cyber'); await app.ready();
   assert.equal(app.requests.length, beforeWrite); assert.equal(app.server.state.preferences.theme, 'explorer');
   assert.ok(app.requests.slice(beforeExpiry).every(item => item.options.headers['x-daj-debug'] === token));
   app.click('退出调试'); await app.ready(); assert.equal(app.state().debugActive, false);
-  app.change('daj-settings-theme', 'cyber'); await app.ready();
+  app.change('daj-global-theme', 'cyber'); await app.ready();
   assert.equal(app.server.state.preferences.theme, 'cyber'); assert.equal(app.requests.at(-1).options.headers['x-daj-debug'], undefined);
 });
 
@@ -651,6 +677,72 @@ test('every drawn card exposes an immediate equip action and the frame shows the
   assert.ok(app.nodes().filter(node => node.type === 'button' && node.props['aria-label'] === '佩戴到成就框 山海小狐').every(node => node.props.disabled));
 });
 
+test('achievement generation count defaults to three, clamps to the exact range and submits the global theme', async t => {
+  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心');
+  app.change('daj-global-theme', 'ocean'); await app.ready(); app.click('自定义生成');
+  const countField = () => app.nodes().find(node => node.props?.id === 'daj-generation-count');
+  assert.equal(countField().props.value, 3); assert.equal(countField().props.min, 1); assert.equal(countField().props.max, 6);
+  app.change('daj-generation-count', '9'); assert.equal(countField().props.value, 6);
+  app.change('daj-generation-count', '0'); assert.equal(countField().props.value, 1);
+  app.change('daj-generation-count', '4'); app.click('分析并生成成就'); await app.ready();
+  const request = app.requests.find(item => item.url.endsWith('/generation') && item.options.method === 'POST');
+  const body = JSON.parse(request.options.body);
+  assert.equal(body.kind, 'achievements'); assert.equal(body.count, 4); assert.equal(body.theme, 'ocean');
+  assert.equal(app.state().generationJob.count, 4);
+  assert.ok(!app.nodes().some(node => node.props?.id === 'daj-generation-theme'));
+});
+
+test('deleting custom achievements hides active collections while preserving awards, points and history', async t => {
+  const custom = definition({ id: 'custom-earned', title: '已获自选纪念', source: 'model', unlockedAt: 100 });
+  const old = definition({ id: 'already-deleted', title: '旧删除纪念', source: 'model', status: 'archived', unlockedAt: 90 });
+  const awards = [custom, old].map((item, index) => ({ id: 'award:' + item.id, definitionId: item.id, at: 100 - index, title: item.title, description: '已经走过的一段路', source: 'automatic' }));
+  const app = harness(journal({ definitions: [definition(), custom, old], awards,
+    timeline: awards.map(award => ({ id: 'history:' + award.id, kind: 'unlock', at: award.at, title: award.title, definitionId: award.definitionId, awardId: award.id, source: 'automatic' })),
+    collection: { points: { earned: 2, spent: 0, balance: 2 }, characters: [], owned: [], draws: [] }, equipment: { badges: ['custom-earned'], charm: null, character: null },
+  })); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('自定义生成');
+  assert.match(app.textContent(), /已获自选纪念/); assert.doesNotMatch(app.textContent(), /旧删除纪念/);
+  const before = app.requests.filter(item => item.options.method === 'POST').length;
+  app.click('删除成就 已获自选纪念'); assert.match(app.textContent(), /删除后保留已获记录和点数/);
+  assert.equal(app.requests.filter(item => item.options.method === 'POST').length, before);
+  app.click('确认删除成就 已获自选纪念'); await app.ready();
+  const deletion = app.requests.find(item => item.url.endsWith('/delete'));
+  assert.ok(deletion); const body = JSON.parse(deletion.options.body);
+  assert.deepEqual(body.ids, ['custom-earned']); assert.equal(body.expectedRevision, 1); assert.ok(body.requestId);
+  assert.equal(app.state().data.definitions.find(item => item.id === 'custom-earned').status, 'archived');
+  assert.equal(app.state().data.awards.length, 2); assert.equal(app.state().data.collection.points.balance, 2);
+  assert.doesNotMatch(app.textContent(), /已获自选纪念|旧删除纪念/);
+  app.click('成就收藏'); assert.doesNotMatch(app.textContent(), /已获自选纪念|旧删除纪念|已归档/);
+  app.click('使用历程'); assert.match(app.textContent(), /已获自选纪念/); assert.match(app.textContent(), /旧删除纪念/); assert.match(app.textContent(), /已经走过的一段路/);
+  assert.ok(!app.nodes().some(node => node.type === 'button' && node.props['aria-label'] === '查看成就详情'));
+});
+
+test('one global theme scopes characters and receipts, resets local editing and restores a matching equipped character', async t => {
+  const explorer = character({ name: '探索同伴' });
+  const garden = character({ id: 'garden-friend', name: '花园同伴', source: 'user', theme: 'garden' });
+  const gardenPending = character({ id: 'garden-pending', name: '花园未获角色', theme: 'garden' });
+  const receipts = [explorer, garden].map((item, index) => ({ requestId: 'saved:' + item.id, theme: item.theme, at: 100 + index, cost: 1, results: [{ id: item.id, rarity: item.rarity, isNew: true }] }));
+  const app = harness(journal({ equipment: { badges: [], charm: null, character: explorer.id }, collection: { points: { earned: 2, spent: 2, balance: 0 }, characters: [explorer, garden, gardenPending], owned: [{ id: explorer.id, count: 1, firstAt: 100 }, { id: garden.id, count: 1, firstAt: 101 }], draws: receipts } }));
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏');
+  let results = app.nodes().find(node => node.props?.['aria-label'] === '十连抽取结果');
+  assert.match(app.textContent(results), /探索同伴/); assert.doesNotMatch(app.textContent(), /花园同伴|花园未获角色/);
+  for (const id of ['daj-settings-theme', 'daj-draw-theme', 'daj-character-theme-filter', 'daj-generation-theme', 'daj-character-generation-theme', 'daj-character-theme', 'daj-debug-theme']) assert.ok(!app.nodes().some(node => node.props?.id === id));
+  assert.equal(app.nodes().filter(node => node.type === 'select' && node.props.id === 'daj-global-theme').length, 1);
+  app.change('daj-global-theme', 'garden'); await app.ready();
+  assert.match(app.textContent(), /花园同伴/); assert.doesNotMatch(app.textContent(), /探索同伴|花园未获角色/);
+  results = app.nodes().find(node => node.props?.['aria-label'] === '十连抽取结果'); assert.match(app.textContent(results), /花园同伴/);
+  let footer = app.nodes().find(node => node.type === 'button' && node.props['aria-label'] === '打开成就手记');
+  assert.doesNotMatch(app.textContent(footer), /探索同伴/); assert.equal(app.state().data.equipment.character, explorer.id);
+  footer.props.onClick(); app.render(); assert.equal(app.state().tab, 'overview');
+  app.click('角色收藏'); app.click('全部卡池'); assert.match(app.textContent(), /花园未获角色/);
+  app.click('编辑角色 花园同伴'); app.change('daj-character-name', '不应跨主题残留');
+  app.change('daj-global-theme', 'explorer'); await app.ready();
+  assert.ok(!app.nodes().some(node => node.props?.id === 'daj-character-name'));
+  assert.doesNotMatch(app.textContent(), /花园同伴|花园未获角色/);
+  footer = app.nodes().find(node => node.type === 'button' && node.props['aria-label'] === '打开成就手记'); assert.match(app.textContent(footer), /探索同伴/);
+  assert.equal(app.requests.filter(item => item.url.endsWith('/equip')).length, 0);
+  app.click('创作角色'); assert.equal(app.nodes().find(node => node.props?.id === 'daj-character-name').props.value, '');
+});
+
 test('feedback preferences take effect immediately and preview never writes real achievements', async t => {
   const app = harness(); t.after(() => app.cleanup()); await app.ready();
   app.server.state.notifications.push({ id: 'progress', kind: 'progress', tokens: 10, at: 2 });
@@ -678,4 +770,114 @@ test('timeouts surface errors, teardown aborts work, and remount resets notifica
   app.remount(); await app.ready(); await app.advance(700);
   assert.equal(app.document.head.children.length, 1); assert.equal(app.state().toast, null);
   app.click('打开成就中心'); assert.equal(app.nodes().filter(node => node.props?.role === 'dialog').length, 1);
+});
+
+test('a draw rejected after another window changes the theme releases its old request and follows the refreshed global theme', async t => {
+  const app = harness(journal({ collection: { points: { earned: 1, spent: 0, balance: 1 },
+    characters: [character(), character({ id: 'cyber-hero', theme: 'cyber', name: '网络旅伴' })], owned: [], draws: [] } }));
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏');
+  app.server.state.preferences.theme = 'cyber'; app.server.state.revision += 1;
+  app.click('1 成就点 · 十连抽取'); await app.ready();
+  assert.equal(app.state().data.preferences.theme, 'cyber');
+  assert.equal(app.state().drawRetry, false); assert.equal(app.state().drawTheme, null);
+  assert.equal(app.storage.has('dsh-achievement-journal.draw'), false); assert.equal(app.server.drawWrites, 0);
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-global-theme').props.disabled, false);
+  app.click('1 成就点 · 十连抽取'); await app.ready();
+  const draws = app.requests.filter(item => item.url.endsWith('/draw')).map(item => JSON.parse(item.options.body));
+  assert.equal(draws.length, 2); assert.notEqual(draws[0].requestId, draws[1].requestId);
+  assert.equal(draws[0].theme, 'explorer'); assert.equal(draws[1].theme, 'cyber');
+  assert.equal(app.server.drawWrites, 1); assert.equal(app.state().data.collection.points.spent, 1);
+});
+
+test('an explicitly uncommitted insufficient-points draw does not lock theme preferences behind a futile retry', async t => {
+  const app = harness(journal({ collection: { points: { earned: 1, spent: 0, balance: 1 }, characters: [character()], owned: [], draws: [] } }));
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏');
+  app.server.state.collection.points = { earned: 1, spent: 1, balance: 0 }; app.server.state.revision += 1;
+  app.click('1 成就点 · 十连抽取'); await app.ready();
+  assert.equal(app.state().drawRetry, false); assert.equal(app.storage.has('dsh-achievement-journal.draw'), false);
+  assert.equal(app.state().data.collection.points.balance, 0); assert.equal(app.server.drawWrites, 0);
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-global-theme').props.disabled, false);
+  app.change('daj-global-theme', 'garden'); await app.ready();
+  assert.equal(app.state().data.preferences.theme, 'garden');
+});
+
+test('uncertain draw durability retains the complete original body until its committed receipt is confirmed', async t => {
+  const app = harness(journal({ collection: { points: { earned: 1, spent: 0, balance: 1 }, characters: [character()], owned: [], draws: [] } }));
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏');
+  app.server.failDrawAfterCommitCode = 'DURABILITY_UNCERTAIN';
+  app.click('1 成就点 · 十连抽取'); await app.ready();
+  assert.equal(app.state().drawRetry, true); assert.equal(app.storage.has('dsh-achievement-journal.draw'), true);
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-global-theme').props.disabled, true);
+  app.click('重试这次十连'); await app.ready();
+  const draws = app.requests.filter(item => item.url.endsWith('/draw')).map(item => JSON.parse(item.options.body));
+  assert.equal(draws.length, 2); assert.deepEqual(draws[0], draws[1]);
+  assert.equal(app.server.drawWrites, 1); assert.equal(app.state().data.collection.points.spent, 1);
+  assert.equal(app.state().drawRetry, false); assert.equal(app.storage.has('dsh-achievement-journal.draw'), false);
+});
+
+test('a lost generation start response locks its original count and repeats the exact body rather than charging a new task', async t => {
+  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('自定义生成');
+  app.change('daj-generation-count', 4); app.change('daj-generation-direction', '保留原方向');
+  app.server.failGenerationAfterCommit = true;
+  app.click('分析并生成成就'); await app.ready();
+  assert.equal(app.server.generationWrites, 1); assert.equal(app.server.job.status, 'succeeded');
+  assert.equal(app.state().generationJob, null); assert.equal(app.state().generationPending, true);
+  assert.equal(app.storage.has('dsh-achievement-journal.generation-start'), true);
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-generation-count').props.disabled, true);
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-generation-direction').props.disabled, true);
+  app.change('daj-generation-count', 6);
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-generation-count').props.value, 4);
+  // Another actor's latest job, even when visible through state polling, is
+  // not an acknowledgement of this original POST identity.
+  app.server.job = { id: 'another-actors-job', status: 'succeeded', stage: 'done', updatedAt: 300, createdDefinitionIds: [] };
+  app.server.state.generation = { job: clone(app.server.job) }; app.server.state.revision += 1;
+  await app.advance(1800); assert.equal(app.state().generationPending, true);
+  app.click('重试本次生成'); await app.ready();
+  const posts = app.requests.filter(item => item.url.endsWith('/generation') && item.options.method === 'POST');
+  assert.equal(posts.length, 2); assert.equal(posts[0].options.body, posts[1].options.body);
+  assert.equal(JSON.parse(posts[1].options.body).count, 4); assert.equal(JSON.parse(posts[1].options.body).direction, '保留原方向');
+  assert.equal(app.server.generationWrites, 1); assert.equal(app.state().generationJob.status, 'succeeded');
+  assert.equal(app.state().generationPending, false); assert.equal(app.storage.has('dsh-achievement-journal.generation-start'), false);
+});
+
+test('pending real generation survives remount, theme changes and debug mode without replaying against the debug scope', async t => {
+  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('自定义生成');
+  app.change('daj-generation-count', 2); app.server.failGenerationAfterCommit = true;
+  app.click('分析并生成成就'); await app.ready();
+  const original = app.requests.find(item => item.url.endsWith('/generation') && item.options.method === 'POST').options.body;
+  app.server.state.preferences.theme = 'cyber'; app.server.state.revision += 1;
+  app.cleanup(); await settle(); app.remount(); await app.ready();
+  assert.equal(app.state().data.preferences.theme, 'cyber'); assert.equal(app.state().generationPending, true);
+  app.click('打开成就中心'); app.click('主题与反馈设置'); app.click('进入调试模式'); await app.ready();
+  assert.equal(app.state().debugActive, true); assert.equal(app.state().generationPending, false);
+  assert.equal(app.storage.get('dsh-achievement-journal.generation-start'), original);
+  assert.equal(app.requests.filter(item => item.url.endsWith('/generation') && item.options.method === 'POST').length, 1);
+  app.click('退出调试模式'); await app.ready(); app.click('自定义生成');
+  assert.equal(app.state().generationPending, true);
+  app.click('重试原生成请求'); await app.ready();
+  const posts = app.requests.filter(item => item.url.endsWith('/generation') && item.options.method === 'POST');
+  assert.equal(posts.length, 2); assert.equal(posts[1].options.body, original);
+  assert.ok(posts.every(item => !item.options.headers['x-daj-debug']));
+  assert.equal(JSON.parse(posts[1].options.body).theme, 'explorer'); assert.equal(app.state().data.preferences.theme, 'cyber');
+  assert.equal(app.server.generationWrites, 1); assert.equal(app.state().generationPending, false);
+});
+
+test('only explicit unaccepted generation errors release intent; uncertain storage retries the original request', async t => {
+  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('自定义生成');
+  app.server.state.preferences.theme = 'cyber'; app.server.state.revision += 1;
+  app.click('分析并生成成就'); await app.ready();
+  assert.equal(app.server.generationWrites, 0); assert.equal(app.state().generationPending, false);
+  assert.equal(app.storage.has('dsh-achievement-journal.generation-start'), false);
+  assert.equal(app.state().data.preferences.theme, 'cyber');
+  app.change('daj-generation-count', 2); app.click('分析并生成成就'); await app.ready();
+  assert.equal(app.server.generationWrites, 1); assert.equal(app.state().generationJob.count, 2);
+
+  const other = harness(); t.after(() => other.cleanup()); await other.ready(); other.click('打开成就中心'); other.click('自定义生成');
+  other.server.failGenerationAfterCommitCode = 'GENERATION_STORAGE';
+  other.click('分析并生成成就'); await other.ready();
+  assert.equal(other.state().generationPending, true);
+  other.click('重试原生成请求'); await other.ready();
+  const posts = other.requests.filter(item => item.url.endsWith('/generation') && item.options.method === 'POST');
+  assert.equal(posts.length, 2); assert.equal(posts[0].options.body, posts[1].options.body);
+  assert.equal(other.server.generationWrites, 1); assert.equal(other.state().generationPending, false);
 });

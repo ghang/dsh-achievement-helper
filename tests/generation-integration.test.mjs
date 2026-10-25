@@ -125,6 +125,7 @@ async function fixture(t, { gated = false, reply = { definitions: [generated] } 
     return service;
   };
   await create();
+  await service.mutate('preferences', { theme: 'xianxia' });
   assert.equal(service.catalog().capabilities.sources.find(item => item.kind === 'tokens')?.connected, true);
   assert.equal((await service.generation.info()).available, true);
   return { directory, statePath, upstream, gate, session, sessionSequence,
@@ -280,6 +281,7 @@ test('journals in the same directory isolate generation receipts and request ide
     assert.fail('generation receipt did not finish its durable usage acknowledgement');
   };
   a = await create(aPath); b = await create(bPath);
+  await a.mutate('preferences', { theme: 'xianxia' }); await b.mutate('preferences', { theme: 'xianxia' });
   assert.equal(a.snapshot().storage.status, 'ready');
   assert.equal(b.snapshot().storage.status, 'ready');
   const aInput = { requestId: 'same-click', metrics: ['tokens'], theme: 'xianxia', style: 'balanced', direction: '甲册自然积累' };
@@ -314,6 +316,7 @@ test('journals in the same directory isolate generation receipts and request ide
 test('one-click character generation uses the host LLM and creates collectible definitions without granting a draw', { timeout: 15000 }, async t => {
   const character = { name: '潮汐信使', description: '捎来远海故事的小小伙伴。', theme: 'ocean', rarity: 'SR', icon: 'shell', animation: 'orbit' };
   const f = await fixture(t, { reply: { characters: [character] } });
+  await f.service.mutate('preferences', { theme: 'ocean' });
   const before = f.service.snapshot();
   const request = { requestId: 'character-integration', kind: 'characters', theme: 'ocean', direction: '温柔的海洋伙伴', sessionId: input.sessionId };
   const started = await f.service.generation.start(request);
@@ -349,5 +352,24 @@ test('one-click character generation uses the host LLM and creates collectible d
   assert.deepEqual(f.service.generation.get(job.id).job.createdCharacterIds, job.createdCharacterIds);
   assert.equal(f.service.snapshot().revision, revision);
   assert.equal(f.upstream.requests.length, 1);
+  assertAuxiliaryUsage(f, f.service.generation.get(job.id).job);
+});
+
+test('a requested achievement count survives the real host LLM, application and receipt replay', { timeout: 15000 }, async t => {
+  const definitions = Array.from({ length: 3 }, (_, index) => ({ ...generated, title: `真实三项${index + 1}` }));
+  const f = await fixture(t, { reply: { definitions } });
+  const request = { ...input, requestId: 'exact-count-integration', count: 3 };
+  const started = await f.service.generation.start(request);
+  const job = await settled(f.service, started.job.id);
+  assert.equal(job.status, 'succeeded', JSON.stringify(job)); assert.equal(job.count, 3);
+  assert.equal(job.createdDefinitionIds.length, 3);
+  assert.ok(job.createdDefinitionIds.every(id => f.service.snapshot().definitions.find(item => item.id === id)?.source === 'model'));
+  const sent = f.upstream.requests[0], supplied = JSON.parse(sent.messages[0].content[0].text);
+  assert.equal(supplied.count, 3); assert.match(JSON.stringify(sent.system), /Generate exactly 3/);
+  assert.deepEqual(sent.tools ?? [], []); assertAuxiliaryUsage(f, job);
+  await f.service.mutate('preferences', { theme: 'cyber' });
+  await f.restart();
+  assert.equal((await f.service.generation.start(request)).job.count, 3);
+  assert.equal(f.service.snapshot().preferences.theme, 'cyber'); assert.equal(f.upstream.requests.length, 1);
   assertAuxiliaryUsage(f, f.service.generation.get(job.id).job);
 });

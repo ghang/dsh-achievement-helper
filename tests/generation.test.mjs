@@ -31,6 +31,7 @@ async function waitFor(controller, predicate = job => job && job.status !== 'run
 async function fixture(t, overrides = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'achievement-generation-'));
   const journal = await createJournal({ file: join(directory, 'journal.json') });
+  await journal.preferences({ theme: 'xianxia' });
   const file = join(directory, 'generation-v1.json'), calls = [], prepares = [], receipts = [], applies = [];
   const dataCatalog = { ...journal.catalog(), capabilities: { sources: sourceKinds.map(kind => ({ kind, connected: true })), recipes: ['read_then_change', 'skill_then_change', 'delegate_then_present', 'recall_then_change', 'search_read_change'].map(id => ({ id, available: true })) } };
   const ctx = { sessions: { get: () => undefined }, agentDefaultModel: { currentSelection: () => ({ provider: 'default-provider', model: 'default-model' }) },
@@ -457,10 +458,12 @@ test('character output rejects assets, grants, off-catalog choices, wrong themes
 test('character presets and all ten themes come from the current catalog before a model call', async t => {
   const f = await fixture(t, { stream: () => chunks(characterOutput([character({ theme: 'space', name: '星湾旅伴', icon: 'ship', animation: 'orbit' })])) });
   assert.equal(f.dataCatalog.themeIds.length, 10);
+  await f.journal.preferences({ theme: 'space' });
   await f.c.start(characterRequest('space-character', { theme: 'space' }));
   assert.equal((await waitFor(f.c)).status, 'succeeded');
   f.dataCatalog.themeIds = f.dataCatalog.themeIds.filter(theme => theme !== 'space');
   await assert.rejects(f.c.start(characterRequest('removed-theme', { theme: 'space' })), { code: 'GENERATION_SOURCE_UNAVAILABLE' });
+  await f.journal.preferences({ theme: 'xianxia' });
   const icons = f.dataCatalog.collection.iconIds; f.dataCatalog.collection.iconIds = [];
   await assert.rejects(f.c.start(characterRequest('missing-role-presets')), { code: 'GENERATION_SOURCE_UNAVAILABLE' });
   f.dataCatalog.collection.iconIds = icons;
@@ -535,6 +538,8 @@ test('legacy achievement receipts without kind retain identity and never trigger
   await f.c.dispose();
   const data = JSON.parse(await readFile(f.file, 'utf8'));
   delete data.jobs[0].summary.kind; delete data.jobs[0].createdCharacterIds;
+  assert.equal(Object.hasOwn(data.jobs[0].summary, 'count'), false);
+  await f.journal.preferences({ theme: 'cyber' });
   await writeFile(f.file, JSON.stringify(data)); await f.reopen();
   const replay = await f.c.start({ ...input, kind: 'achievements' });
   assert.equal(replay.job.id, original.id); assert.equal(replay.job.kind, 'achievements');
@@ -607,4 +612,105 @@ test('one remaining character slot bounds the prompt and rejects two outputs, th
   assert.equal(blocked.attempted, false);
   assert.equal(f.prepares.length, 2); assert.equal(f.calls.length, 1, 'a pool filled during preparation must not dispatch another model request');
   assert.equal(f.applies.length, 0); assert.equal(f.receipts.length, 1);
+});
+
+test('an explicit achievement count is exact, persisted, model-sourced and idempotent after a theme change', async t => {
+  const definitions = Array.from({ length: 3 }, (_, index) => definition(undefined, { title: `三项旅程${index + 1}` }));
+  const f = await fixture(t, { stream: () => chunks(output(definitions)) });
+  assert.deepEqual((await f.c.info()).countRange, { min: 1, max: 6, default: 3 });
+  const input = request('exact-three', { count: 3 });
+  const started = await f.c.start(input); assert.equal(started.job.count, 3);
+  const job = await waitFor(f.c);
+  assert.equal(job.status, 'succeeded'); assert.equal(job.count, 3); assert.equal(job.createdDefinitionIds.length, 3);
+  assert.ok(job.createdDefinitionIds.every(id => f.journal.snapshot().definitions.find(item => item.id === id)?.configuredBy === 'model'));
+  const supplied = JSON.parse(f.calls[0].messages[0].content[0].text);
+  assert.equal(supplied.count, 3); assert.equal(supplied.allowed.count, 3); assert.match(f.calls[0].system, /Generate exactly 3/);
+  const stored = JSON.parse(await readFile(f.file, 'utf8')); assert.equal(stored.jobs[0].summary.count, 3);
+  await assert.rejects(f.c.start({ ...input, count: 2 }), { code: 'GENERATION_REQUEST_ID_REUSED' });
+  await f.journal.preferences({ theme: 'cyber' });
+  assert.equal((await f.c.start(input)).job.id, job.id);
+  await f.reopen(); assert.equal((await f.c.start(input)).job.count, 3);
+  assert.equal(f.calls.length, 1); assert.equal(f.receipts.length, 1);
+});
+
+test('wrong output counts are rejected without truncating, padding or partially applying achievements', async t => {
+  let length = 2;
+  const f = await fixture(t, { stream: () => chunks(output(Array.from({ length }, (_, index) => definition(undefined, { title: `数量校验${index}` })))) });
+  const before = f.journal.snapshot();
+  for (const requestedLength of [2, 4, 0]) {
+    length = requestedLength;
+    await f.c.start(request(`wrong-count-${length}`, { count: 3 }));
+    const job = await waitFor(f.c);
+    assert.equal(job.status, 'failed'); assert.equal(job.code, 'GENERATION_OUTPUT'); assert.equal(job.count, 3);
+    assert.deepEqual(job.createdDefinitionIds, []);
+  }
+  assert.equal(f.applies.length, 0); assert.deepEqual(f.journal.snapshot(), before);
+});
+
+test('invalid achievement counts and every character count are rejected before model preparation', async t => {
+  const f = await fixture(t);
+  for (const count of [0, 7, 1.5, '3', null, false]) await assert.rejects(f.c.start(request(`invalid-count-${String(count)}`, { count })), { code: 'GENERATION_INVALID' });
+  for (const count of [1, undefined]) await assert.rejects(f.c.start(characterRequest('ambiguous-character-count', { count })), { code: 'GENERATION_INVALID' });
+  assert.equal(f.prepares.length, 0); assert.equal(f.calls.length, 0); assert.equal(f.c.get().job, null);
+});
+
+test('all stored achievement slots count toward capacity and explicit counts cannot exceed remaining slots', async t => {
+  const f = await fixture(t);
+  const remaining = f.dataCatalog.limits.definitions - f.journal.snapshot().definitions.length;
+  for (let offset = 0; offset < remaining; offset += 64) await f.journal.configure({ requestId: `fill-achievement-${offset}`,
+    definitions: Array.from({ length: Math.min(64, remaining - offset) }, (_, index) => definition(undefined, { title: `容量目标${offset + index}` })) }, { source: 'user' });
+  await assert.rejects(f.c.start(request('full-achievement-pool')), { code: 'GENERATION_ACHIEVEMENT_CAPACITY' });
+  const custom = f.journal.snapshot().definitions.find(item => item.source === 'model');
+  await f.journal.configure({ requestId: 'archive-full-slot', archiveIds: [custom.id] }, { source: 'user' });
+  await assert.rejects(f.c.start(request('archive-is-not-free-capacity', { count: 1 })), { code: 'GENERATION_ACHIEVEMENT_CAPACITY' });
+  assert.equal(f.prepares.length, 0); assert.equal(f.calls.length, 0);
+
+  const g = await fixture(t);
+  g.dataCatalog.limits.definitions = g.journal.snapshot().definitions.length + 1;
+  await assert.rejects(g.c.start(request('two-with-one-slot', { count: 2 })), { code: 'GENERATION_ACHIEVEMENT_CAPACITY' });
+  assert.equal(g.prepares.length, 0); assert.equal(g.calls.length, 0);
+  const prepare = g.ctx.llm.prepareCall;
+  g.ctx.llm.prepareCall = async (...args) => {
+    const result = await prepare(...args);
+    await g.journal.configure({ requestId: 'fill-while-preparing-achievement', definitions: [definition(undefined, { title: '另一作者的最后名额' })] }, { source: 'user' });
+    return result;
+  };
+  await g.c.start(request('slot-filled-before-send', { count: 1 }));
+  const blocked = await waitFor(g.c);
+  assert.equal(blocked.code, 'GENERATION_ACHIEVEMENT_CAPACITY'); assert.equal(blocked.attempted, false);
+  assert.equal(g.calls.length, 0); assert.equal(g.applies.length, 0); assert.equal(g.receipts.length, 0);
+});
+
+test('a new generation must follow the global theme while an existing receipt replays unchanged', async t => {
+  const f = await fixture(t);
+  await f.journal.preferences({ theme: 'cyber' });
+  await assert.rejects(f.c.start(request('stale-theme')), { code: 'GENERATION_THEME_MISMATCH' });
+  await assert.rejects(f.c.start(characterRequest('stale-character-theme')), { code: 'GENERATION_THEME_MISMATCH' });
+  assert.equal(f.prepares.length, 0); assert.equal(f.calls.length, 0);
+  const input = request('current-cyber-theme', { theme: 'cyber' });
+  await f.c.start(input); const job = await waitFor(f.c); assert.equal(job.status, 'succeeded');
+  await f.journal.preferences({ theme: 'xianxia' });
+  assert.equal((await f.c.start(input)).job.id, job.id); assert.equal(f.calls.length, 1);
+});
+
+test('a global theme change during preparation prevents dispatch instead of generating under an old theme', async t => {
+  const entered = deferred(), prepared = deferred(); let dispatches = 0;
+  const f = await fixture(t, { prepare: async config => { entered.resolve(); await prepared.promise; return { config, stream() { dispatches++; return chunks(); } }; } });
+  await f.c.start(request('theme-before-dispatch', { count: 1 })); await entered.promise;
+  await f.journal.preferences({ theme: 'cyber' }); prepared.resolve();
+  const job = await waitFor(f.c);
+  assert.equal(job.status, 'failed'); assert.equal(job.code, 'GENERATION_THEME_MISMATCH');
+  assert.equal(dispatches, 0); assert.equal(f.applies.length, 0); assert.equal(f.receipts.length, 0);
+});
+
+test('character naming is guided by the selected common ranks while preserving explicit custom artifact names', async t => {
+  const f = await fixture(t, { stream: () => chunks(characterOutput([character({ name: '自定天工炉' })])) });
+  const examples = f.dataCatalog.collection.themeNaming.byTheme.xianxia;
+  assert.equal(examples.length, 8);
+  await f.c.start(characterRequest('explicit-custom-artifact', { direction: '请保留我指定的法宝名字：自定天工炉' }));
+  const job = await waitFor(f.c); assert.equal(job.status, 'succeeded');
+  const supplied = JSON.parse(f.calls[0].messages[0].content[0].text);
+  assert.deepEqual(supplied.allowed.nameExamples, examples);
+  assert.match(f.calls[0].system, /common ranks or professions/); assert.match(f.calls[0].system, /respect any explicit custom name/);
+  assert.equal(f.journal.snapshot().collection.characters.find(item => item.id === job.createdCharacterIds[0]).name, '自定天工炉');
 });

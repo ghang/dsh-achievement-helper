@@ -64,6 +64,7 @@ test('quick completions, charms and draws never change real bytes or pass notifi
   const completed = await f.c.action(token, { requestId: 'quick-one', action: 'complete', definitionId: 'first-read' });
   assert.equal(completed.debug, true); assert.equal(completed.awards.length, 1); assert.ok(completed.notifications.some(item => item.kind === 'unlock'));
   await f.c.action(token, { requestId: 'quick-charm', action: 'charm', charm: 'leaf' });
+  await f.c.mutate(token, 'preferences', { theme: 'ocean' });
   const drawn = await f.c.action(token, { requestId: 'quick-ten', action: 'draw', theme: 'ocean' });
   assert.equal(drawn.equipment.charm, 'leaf'); assert.equal(drawn.collection.draws.length, 1); assert.equal(drawn.collection.points.balance, 0);
   const receipt = f.c.get(token).drawReceipt('quick-ten'); assert.equal(receipt.theme, 'ocean'); assert.equal(receipt.results.length, 10);
@@ -89,26 +90,29 @@ test('real collection continues during debug and reset takes a fresh copy withou
 test('debug completion clears the selected incomplete condition without converting unknown real usage to zero', async t => {
   const f = await fixture(t);
   await f.journal.ingest([{ id: 'unknown-call', kind: 'tokens', at: 1000, sessionId: 'real-session', turnKey: 'real-turn' }]);
-  await f.journal.configure({ requestId: 'archived-one', archiveIds: ['first-change'] });
+  await f.journal.configure({ requestId: 'archived-one', definitions: [{ id: 'archived-custom', title: '自定义旧目标', rule: { template: 'first_seen', metric: 'file_changed' } }], archiveIds: ['archived-custom'] });
   const before = await readFile(f.statePath, 'utf8'), { token } = await f.c.start();
   const completed = await f.c.action(token, { requestId: 'unknown-complete', action: 'complete', definitionId: 'million' });
   const definition = completed.definitions.find(item => item.id === 'million');
   assert.equal(definition.progress, 1000000); assert.equal(definition.incomplete, false); assert.equal(completed.totals.tokens, null);
   const all = await f.c.action(token, { requestId: 'complete-active', action: 'complete_all' });
   assert.ok(all.definitions.filter(item => item.status === 'active').every(item => item.unlockedAt !== undefined && !item.incomplete));
-  assert.equal(all.definitions.find(item => item.id === 'first-change').unlockedAt, undefined);
-  await assert.rejects(f.c.action(token, { requestId: 'cannot-complete-archive', action: 'complete', definitionId: 'first-change' }), code('ARCHIVED'));
+  assert.equal(all.definitions.find(item => item.id === 'archived-custom').unlockedAt, undefined);
+  await assert.rejects(f.c.action(token, { requestId: 'cannot-complete-archive', action: 'complete', definitionId: 'archived-custom' }), code('ARCHIVED'));
   assert.equal(await readFile(f.statePath, 'utf8'), before); assert.equal(f.journal.snapshot().definitions.find(item => item.id === 'million').progress, null);
 });
 
 test('debug draw atomically earns a point if needed, charges once and equips the highest drawn rarity', async t => {
   const f = await fixture(t), { copy } = await f.openCopy();
+  await copy.preferences({ theme: 'xianxia' });
   const input = { requestId: 'atomic-debug-draw', action: 'draw', theme: 'xianxia' };
   const [first, repeat] = await Promise.all([copy.debugAction(input), copy.debugAction(input)]);
   assert.equal(first.revision, repeat.revision); assert.equal(first.awards.length, 1); assert.equal(first.collection.draws.length, 1);
   assert.deepEqual(first.collection.points, { earned: 1, spent: 1, balance: 0 });
   const receipt = copy.drawReceipt(input.requestId); assert.equal(receipt.results[9].rarity, 'SR'); assert.equal(first.equipment.character, receipt.results[9].id);
   await assert.rejects(copy.debugAction({ ...input, theme: 'cyber' }), code('REQUEST_ID_REUSED'));
+  await copy.preferences({ theme: 'cyber' });
+  const retried = await copy.debugAction(input); assert.equal(retried.collection.draws.length, 1);
   const next = await copy.debugAction({ requestId: 'atomic-debug-draw-two', action: 'draw', theme: 'cyber' }); assert.equal(next.awards.length, 2); assert.equal(next.collection.points.spent, 2);
   assert.equal(copy.drawReceipt(input.requestId).theme, 'xianxia');
 });
