@@ -81,10 +81,10 @@ async function gateResponse(upstream) {
   };
 }
 
-async function fixture(t, { gated = false } = {}) {
+async function fixture(t, { gated = false, reply = { definitions: [generated] } } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'achievement-generation-integration-'));
   const statePath = join(directory, 'journal/state.json');
-  const upstream = await fakeUpstream([{ text: JSON.stringify({ definitions: [generated] }) }]);
+  const upstream = await fakeUpstream([{ text: JSON.stringify(reply) }]);
   const gate = gated ? await gateResponse(upstream) : null;
   const realCtx = new Context();
   let service;
@@ -309,4 +309,45 @@ test('journals in the same directory isolate generation receipts and request ide
   assert.equal(upstream.requests.length, 2, 'both restarted archives retain their own deduplication receipts');
   assert.equal(a.snapshot().totals.tokens, 310); assert.equal(b.snapshot().totals.tokens, 310);
   assert.equal(a.snapshot().totals.turns, 0); assert.equal(b.snapshot().totals.turns, 0);
+});
+
+test('one-click character generation uses the host LLM and creates collectible definitions without granting a draw', { timeout: 15000 }, async t => {
+  const character = { name: '潮汐信使', description: '捎来远海故事的小小伙伴。', theme: 'ocean', rarity: 'SR', icon: 'shell', animation: 'orbit' };
+  const f = await fixture(t, { reply: { characters: [character] } });
+  const before = f.service.snapshot();
+  const request = { requestId: 'character-integration', kind: 'characters', theme: 'ocean', direction: '温柔的海洋伙伴', sessionId: input.sessionId };
+  const started = await f.service.generation.start(request);
+  assert.equal(started.job.kind, 'characters');
+  const job = await settled(f.service, started.job.id);
+  assert.equal(job.status, 'succeeded', JSON.stringify(job));
+  assert.equal(job.kind, 'characters'); assert.deepEqual(job.createdDefinitionIds, []);
+  assert.equal(job.createdCharacterIds.length, 1);
+  const after = f.service.snapshot();
+  const created = after.collection.characters.find(item => item.id === job.createdCharacterIds[0]);
+  assert.ok(created); assert.equal(created.source, 'model');
+  for (const key of ['name', 'description', 'theme', 'rarity', 'icon', 'animation']) assert.equal(created[key], character[key]);
+  assert.equal(created.art, undefined);
+  assert.equal(after.collection.characters.length, before.collection.characters.length + 1);
+  for (const key of ['owned', 'ownedCharacters', 'draws', 'drawHistory']) assert.deepEqual(after.collection[key], before.collection[key], 'creating a pool definition must not draw or grant ownership');
+  assert.deepEqual(after.definitions.map(item => item.id), before.definitions.map(item => item.id));
+  assertAuxiliaryUsage(f, job);
+  assert.equal(f.upstream.requests.length, 1);
+  const sent = f.upstream.requests[0];
+  assert.deepEqual(sent.tools ?? [], []); assert.equal(sent.messages.length, 1);
+  const prompt = JSON.parse(sent.messages[0].content[0].text);
+  assert.equal(prompt.theme, 'ocean'); assert.equal(prompt.direction, request.direction);
+  assert.ok(prompt.allowed.iconIds.includes('shell'));
+  assert.ok(prompt.allowed.animationIds.includes('orbit'));
+  assert.deepEqual(prompt.allowed.rarities, ['N', 'R', 'SR', 'SSR']);
+  for (const key of ['metrics', 'recordedCounts', 'art', 'owned', 'wallet', 'history']) assert.equal(prompt[key], undefined);
+  for (const canary of [mainPrompt, mainTool, input.sessionId, f.directory, 'data:image']) assert.ok(!JSON.stringify(sent).includes(canary));
+  const revision = after.revision;
+  assert.equal((await f.service.generation.start(request)).job.id, job.id);
+  await f.restart();
+  assert.equal((await f.service.generation.start(request)).job.id, job.id);
+  assert.equal(f.service.generation.get(job.id).job.kind, 'characters');
+  assert.deepEqual(f.service.generation.get(job.id).job.createdCharacterIds, job.createdCharacterIds);
+  assert.equal(f.service.snapshot().revision, revision);
+  assert.equal(f.upstream.requests.length, 1);
+  assertAuxiliaryUsage(f, f.service.generation.get(job.id).job);
 });

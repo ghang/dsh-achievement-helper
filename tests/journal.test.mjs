@@ -23,7 +23,7 @@ test('a fresh journal has sixteen proposals, stable creation time, and detached 
   const f = await fixture(t);
   const first = f.j.snapshot();
   assert.equal(first.definitions.length, 16);
-  assert.deepEqual(first.preferences, { theme: 'explorer', notifications: 'all', reducedMotion: 'system' });
+  assert.deepEqual(first.preferences, { theme: 'explorer', notifications: 'all', reducedMotion: 'system', frameStyle: 'standard', frameHeight: 64 });
   assert.equal(first.level.progress, 0);
   first.preferences.theme = 'cyber'; first.definitions.length = 0;
   assert.equal(f.j.snapshot().preferences.theme, 'explorer');
@@ -221,7 +221,7 @@ test('themes change presentation without re-granting, resetting conditions, or l
   }
   await f.reopen();
   assert.equal(card(f.j.snapshot(), 'themed').themes.xianxia.title, '自成一卷');
-  assert.deepEqual(f.j.snapshot().equipment, { badges: ['themed'], charm: 'star' });
+  assert.deepEqual(f.j.snapshot().equipment, { badges: ['themed'], charm: 'star', character: null });
 });
 
 test('archiving freezes a goal while preserving its earned collection and appearance', async t => {

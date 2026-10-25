@@ -33,7 +33,24 @@ window.__ModuleLoader__.load({
         progress: '本轮信号已归档', unlock: '新芯片 · ACCESS GRANTED', level: '访问等级已提升',
       },
     };
-    const TAB_IDS = ['overview', 'collection', 'model', 'history'];
+    const EXTRA_THEMES = {
+      wuxia: ['武侠', '江湖行者', '你的江湖行迹', '行走江湖，步步留名', '累计真气', '侠印阁', '江湖旧事', '侠印', '#6f4a3e', '#e8cba5', '#bb8950'],
+      fantasy: ['奇幻', '旅途冒险家', '你的冒险之书', '每次启程，都有回响', '累计魔力', '纹章藏馆', '冒险纪年', '纹章', '#695188', '#d5c4ee', '#c4a16d'],
+      space: ['星际', '星海领航员', '你的星图档案', '跨越星海，留下坐标', '累计星尘', '星徽陈列', '航行日志', '星徽', '#344f8d', '#b7d8ed', '#d6b77e'],
+      ocean: ['深海', '深蓝潜行者', '你的深蓝航记', '向未知下潜，拾起微光', '累计潮汐', '海藏陈列', '深潜日志', '海章', '#286e81', '#b7dfe1', '#c1b37a'],
+      garden: ['花园', '四季园丁', '你的四季手札', '点滴耕耘，自有花开', '累计晨露', '花笺收藏', '四季年谱', '花笺', '#57794b', '#d4e3b5', '#c1a66b'],
+      academy: ['学院', '求知旅人', '你的学院手记', '每一次好奇，都有新页', '累计灵感', '校徽藏室', '求知年鉴', '校徽', '#4a5e83', '#c9d5e5', '#bca06a'],
+      steampunk: ['蒸汽朋克', '机械漫游者', '你的黄铜档案', '让齿轮记住每次转动', '累计蒸汽', '齿轮藏馆', '机械年鉴', '机章', '#765c3f', '#e4d2aa', '#b98c50'],
+    };
+    Object.keys(EXTRA_THEMES).forEach(function (id) {
+      const parts = EXTRA_THEMES[id];
+      THEMES[id] = { name: parts[0], role: parts[1], title: parts[2], hero: parts[3], currency: parts[4], collection: parts[5], history: parts[6], wear: parts[7], art: { dark: parts[8], light: parts[9], gold: parts[10] }, subtitle: '日常的每一点积累，都有属于你的回响。', eyebrow: parts[0] + ' · 个人旅程', tabs: [parts[0] + '总览', parts[5], '模型配置', parts[6]], progress: '新的积累已入册', unlock: '新' + parts[7] + ' · 旅程留痕', level: '新的成长阶段' };
+    });
+    Object.keys(THEMES).forEach(function (id) { THEMES[id].tabs = THEMES[id].tabs.concat('角色收藏'); });
+    const TAB_IDS = ['overview', 'collection', 'model', 'history', 'characters'];
+    const RARITIES = ['N', 'R', 'SR', 'SSR'];
+    const ANIMATION_NAMES = { none: '静止', float: '轻浮动', pulse: '呼吸', orbit: '环游', spark: '星光' };
+    const ICON_NAMES = { compass: '罗盘', star: '星光', book: '书卷', flag: '旗帜', chat: '对话', spark: '灵光', leaf: '叶片', code: '代码', medal: '勋章', sword: '剑', lotus: '莲花', orb: '灵球', fox: '狐狸', robot: '机器人', ship: '飞船', dragon: '龙', moon: '月亮', shell: '贝壳', flower: '花朵', feather: '羽毛', gear: '齿轮', lantern: '灯笼', cat: '猫', owl: '猫头鹰' };
     const CHARM_NAMES = { compass: '随行罗盘', star: '小小星光', leaf: '一叶闲心' };
     const METRIC_NAMES = {
       tokens: 'Token', turns: '完成回合', turn_completed: '完成回合',
@@ -63,6 +80,21 @@ window.__ModuleLoader__.load({
       search: 'M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm5 12 6 6',
       medal: 'm8 2 4 6 4-6m-4 6a7 7 0 1 0 0 14 7 7 0 0 0 0-14Z',
       link: 'm10 14 4-4m-7 6-2 2a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 0 2-2a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0',
+      sword: 'm5 19 9-9m-6 2 4 4M12 8l7-6 3 1-1 3-7 6-2-4ZM2 22l4-4m-4 0 4 4',
+      lotus: 'M12 20C4 18 2 12 2 8c5 0 8 4 10 12Zm0 0C20 18 22 12 22 8c-5 0-8 4-10 12Zm0-1C6 11 8 5 12 2c4 3 6 9 0 17ZM5 21h14',
+      orb: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM4 9c6 5 10 5 16 0M8 4c-3 8-1 13 7 16M12 1v3m0 16v3',
+      fox: 'M3 3 9 7h6l6-4-2 12-7 7-7-7L3 3Zm3 7 4 3m8-3-4 3m-5 3 3 2 3-2',
+      robot: 'M5 6h14v14H5V6Zm3 4h1m6 0h1M9 16h6M12 2v4M2 10v6m20-6v6M8 20v2m8-2v2',
+      ship: 'm12 2 6 8v8l-6-3-6 3v-8l6-8Zm-6 8-4 8 4-2m12-6 4 8-4-2m-9 3-1 4m7-4 1 4M12 8v3',
+      dragon: 'M3 18c3-4 8-2 8-6L8 9l5-4 1-3 3 2 4-1-1 5-4 3 3 4-4 2-3 5-3-2-5 2 2-4H3Zm10-9 3 1m-6 5-3-3',
+      moon: 'M19 17A9 9 0 0 1 7 5a9 9 0 1 0 12 12Z',
+      shell: 'M12 21 3 10C2 4 9 1 12 5c3-4 10-1 9 5l-9 11Zm0-15v15M6 7l6 14m6-14-6 14',
+      flower: 'M12 8c-8-12-14 2-5 5-7 7 7 13 7 3 8 6 12-8 2-8 5-8-9-10-4 0Zm0 0a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
+      feather: 'M3 21 17 7m-8 8C-1 6 12-3 21 3c3 9-5 18-12 12Zm0-5h5m0-5v5',
+      gear: 'm9 2 1 3h4l1-3 4 2-1 4 3 2-1 5-4 1-1 4-5 1-2-3-4 1-2-4 3-3-1-4 4-1 1-3Zm3 6a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
+      lantern: 'M7 3h10M12 1v3M6 5h12l3 6-3 7H6l-3-7 3-6Zm6 0v13m-6-7h12M8 20h8m-4-2v5',
+      cat: 'M4 3 9 7h6l5-4v13l-8 6-8-6V3Zm3 9h2m6 0h2m-7 4 2 2 2-2M1 14l5 1m12 0 5-1',
+      owl: 'M3 3 7 6h10l4-3-1 13-8 6-8-6L3 3Zm4 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm10 0a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm-7 7 2 3 2-3',
     };
     let active = false;
     let generation = 0;
@@ -84,6 +116,9 @@ window.__ModuleLoader__.load({
     const controllers = new Set();
     const listeners = new Set();
     const surfaceOwners = new Set();
+    const staticArtCache = new Map();
+    let pendingDrawId = null;
+    let pendingDrawTheme = null;
     let nextSurface = 0;
     let snapshot = initialState();
 
@@ -93,6 +128,7 @@ window.__ModuleLoader__.load({
         error: null, catalogError: null, actionError: null, busy: false,
         open: false, tab: 'overview', toast: null, notice: null, owner: null,
         generationJob: null, generationLoading: true, generationBusy: false, generationError: null,
+        drawReceipt: null, drawPending: false, drawTheme: null, drawRetry: false, motionVersion: 0,
       };
     }
     function publish(patch) {
@@ -166,6 +202,53 @@ window.__ModuleLoader__.load({
     function concealed(item, data) { return Boolean(item && item.hidden && !unlocked(item) && !awardFor(data, item.id)); }
     function charmFor(data, id) {
       return definitionFor(data, id) || awardFor(data, id) || (CHARM_NAMES[id] ? { id: id, title: CHARM_NAMES[id], icon: id } : null);
+    }
+    function characters(data) { return array(data && data.collection && data.collection.characters); }
+    function characterFor(data, id) { return characters(data).find(function (item) { return item.id === id; }); }
+    function ownedCharacter(data, id) { return array(data && data.collection && data.collection.owned).find(function (item) { return item.id === id && item.count > 0; }); }
+    function customPoolFull(data, catalog) {
+      const limit = catalog && catalog.collection && catalog.collection.limits && catalog.collection.limits.customCharacters;
+      return finite(limit) && characters(data).filter(function (item) { return item.source !== 'builtin'; }).length >= limit;
+    }
+    function frameSettings(data) {
+      const prefs = data && data.preferences || {};
+      return { frameStyle: ['compact', 'standard', 'showcase'].includes(prefs.frameStyle) ? prefs.frameStyle : 'standard', frameHeight: finite(prefs.frameHeight) ? Math.max(32, Math.min(160, prefs.frameHeight)) : 64 };
+    }
+    function validArt(value) {
+      if (typeof value !== 'string') return false;
+      const match = /^data:image\/(png|jpeg|gif|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+      if (!match || match[2].length % 4 || match[2].length * .75 - (match[2].endsWith('==') ? 2 : match[2].endsWith('=') ? 1 : 0) > 262144) return false;
+      try {
+        const header = window.atob(match[2].slice(0, 32));
+        if (match[1] === 'png') return header.slice(0, 8) === '\x89PNG\r\n\x1a\n';
+        if (match[1] === 'jpeg') return header.charCodeAt(0) === 255 && header.charCodeAt(1) === 216 && header.charCodeAt(2) === 255;
+        if (match[1] === 'gif') return header.startsWith('GIF87a') || header.startsWith('GIF89a');
+        return header.startsWith('RIFF') && header.slice(8, 12) === 'WEBP';
+      } catch (_error) { return false; }
+    }
+    function pendingDrawStorage() {
+      try {
+        if (pendingDrawId) window.sessionStorage.setItem('dsh-achievement-journal.draw', JSON.stringify({ id: pendingDrawId, theme: pendingDrawTheme }));
+        else window.sessionStorage.removeItem('dsh-achievement-journal.draw');
+      } catch (_error) { /* The in-memory request id still protects an ordinary retry. */ }
+    }
+    async function drawCharacters(selectedTheme) {
+      if (!active || actionCount) return;
+      if (!pendingDrawId) { pendingDrawId = requestId(); pendingDrawTheme = selectedTheme; pendingDrawStorage(); }
+      const epoch = generation;
+      actionCount += 1; publish({ busy: true, drawPending: true, drawTheme: pendingDrawTheme, actionError: null });
+      try {
+        const value = await request('/draw', { method: 'POST', body: JSON.stringify({ requestId: pendingDrawId, theme: pendingDrawTheme }) });
+        if (!active || epoch !== generation) return;
+        accept(value);
+        if (!value.draw || !Array.isArray(value.draw.results)) throw new Error('抽取结果尚未同步。请重试这一次抽取，不会另开一次请求。');
+        pendingDrawId = null; pendingDrawTheme = null; pendingDrawStorage();
+        publish({ drawReceipt: value.draw, drawTheme: null });
+      } catch (error) {
+        if (active && epoch === generation) publish({ actionError: error.message || '抽取暂未完成，请使用同一次请求重试。' });
+      } finally {
+        if (active && epoch === generation) { actionCount -= 1; publish({ busy: false, drawPending: false, drawRetry: Boolean(pendingDrawId) }); }
+      }
     }
     function isWorn(data, item, slot) {
       const equipment = data && data.equipment || {};
@@ -437,6 +520,20 @@ window.__ModuleLoader__.load({
       const locked = props.locked;
       const glyph = locked && item.hidden ? GLYPHS.spark : GLYPHS[item.icon] || GLYPHS[item.category] || GLYPHS.star;
       const svgProps = { width: size, height: Math.round(size * 1.12), viewBox: '0 0 100 112', className: 'daj-badge' + (locked ? ' daj-locked-art' : ''), 'aria-hidden': true };
+      if (EXTRA_THEMES[skin]) {
+        const colors = THEMES[skin].art;
+        const outlines = {
+          wuxia: 'M50 5 82 23v42L50 92 18 65V23Z', fantasy: 'm50 3 35 27-8 47-27 20-27-20-8-47Z',
+          space: 'm50 6 31 13 13 31-13 31-31 13-31-13L6 50l13-31Z', ocean: 'M50 8C10 7 2 38 17 69l33 29 33-29C98 38 90 7 50 8Z',
+          garden: 'M50 6c13-18 32 0 24 15 23-5 31 21 12 32 19 14 2 37-17 29-4 24-34 24-38 0-19 8-36-15-17-29C-5 42 3 16 26 21 18 6 37-12 50 6Z',
+          academy: 'M16 11h68v52L68 89 50 98 32 89 16 63Z', steampunk: 'm37 5 26 0 5 12 13-2 14 22-7 13 7 13-14 22-13-2-5 12H37l-5-12-13 2L5 63l7-13-7-13 14-22 13 2Z',
+        };
+        return h('svg', svgProps, h('defs', null, h('linearGradient', { id: id, x1: 0, y1: 0, x2: 1, y2: 1 }, h('stop', { stopColor: colors.light }), h('stop', { offset: 1, stopColor: colors.dark }))),
+          h('path', { d: outlines[skin], fill: 'url(#' + id + ')', stroke: colors.gold, strokeWidth: 2 }),
+          h('circle', { cx: 50, cy: 49, r: 28, fill: colors.dark, stroke: colors.gold, opacity: .85 }),
+          h('g', { transform: 'translate(33 32) scale(1.45)', fill: 'none', stroke: '#fff2cc', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round' }, h('path', { d: glyph })),
+          h('path', { d: 'M44 93v15m12-15v15', stroke: colors.gold, strokeWidth: 3 }));
+      }
       if (skin === 'xianxia') return h('svg', svgProps,
         h('defs', null,
           h('linearGradient', { id: id, x1: '0', y1: '0', x2: '1', y2: '1' }, h('stop', { stopColor: '#dce7d0' }), h('stop', { offset: '.42', stopColor: '#87ae96' }), h('stop', { offset: '1', stopColor: '#416a59' }))),
@@ -473,6 +570,188 @@ window.__ModuleLoader__.load({
           h('path', { d: 'M10 170h70l28-35h92l37-49h99l38-32h110M140 190v-34l35-32V26M340 190v-42l35-35V0M30 15h108l40 25h162' }),
           h('circle', { cx: 238, cy: 85, r: 4 }), h('circle', { cx: 373, cy: 54, r: 4 })));
       return h('div', { className: 'daj-orbits', 'aria-hidden': true }, h('i'), h('i'), h('i'));
+    }
+    function CharacterArt(props) {
+      const character = props.character || { name: '尚未佩戴角色', icon: 'star', animation: 'none' };
+      const reduce = props.reduce;
+      const art = validArt(character.art) ? character.art : null;
+      const [still, setStill] = useState(function () { return art && staticArtCache.get(art) || null; });
+      useEffect(function () {
+        let live = true;
+        if (!reduce || !art) { setStill(null); return; }
+        const cached = staticArtCache.get(art);
+        if (cached) { setStill(cached); return; }
+        setStill(null);
+        if (typeof window.Image !== 'function') return;
+        const picture = new window.Image();
+        picture.onload = function () {
+          if (!live) return;
+          try {
+            const canvas = document.createElement('canvas');
+            const scale = Math.min(1, 240 / Math.max(picture.naturalWidth || 1, picture.naturalHeight || 1));
+            canvas.width = Math.max(1, Math.round(picture.naturalWidth * scale)); canvas.height = Math.max(1, Math.round(picture.naturalHeight * scale));
+            canvas.getContext('2d').drawImage(picture, 0, 0, canvas.width, canvas.height);
+            const value = canvas.toDataURL('image/png');
+            staticArtCache.set(art, value);
+            if (staticArtCache.size > 32) staticArtCache.delete(staticArtCache.keys().next().value);
+            setStill(value);
+          } catch (_error) { /* The vector portrait remains a motion-free fallback. */ }
+        };
+        picture.src = art;
+        return function () { live = false; picture.onload = null; picture.onerror = null; };
+      }, [art, reduce]);
+      const colors = THEMES[character.theme] && THEMES[character.theme].art || { dark: '#477a70', light: '#d8e7cf', gold: '#c3a35d' };
+      const ears = ['fox', 'cat', 'dragon'].includes(character.icon);
+      const robot = character.icon === 'robot';
+      return h('span', { className: 'daj-character-art ' + (props.className || ''), 'data-animation': reduce ? 'none' : character.animation || 'none', style: { '--daj-character-size': (props.size || 100) + 'px', '--daj-character-accent': colors.dark, '--daj-character-light': colors.light } },
+        art && (!reduce || still) ? h('img', { src: reduce ? still : art, alt: '', draggable: false }) : h('svg', { viewBox: '0 0 140 160', 'aria-hidden': true },
+          h('ellipse', { cx: 70, cy: 145, rx: 41, ry: 8, fill: colors.dark, opacity: .12 }),
+          h('circle', { cx: 70, cy: 70, r: 57, fill: colors.light, opacity: .48 }),
+          h('path', { d: 'M30 141v-25c0-27 80-27 80 0v25Z', fill: colors.dark }),
+          ears ? h('path', { d: 'm36 52-8-34 32 19m20 0 32-19-8 34', fill: colors.gold, stroke: colors.dark, strokeWidth: 3, strokeLinejoin: 'round' }) : h('path', { d: 'M35 49C30 5 110 5 105 49Z', fill: colors.dark }),
+          robot ? h('rect', { x: 35, y: 39, width: 70, height: 57, rx: 13, fill: colors.light, stroke: colors.dark, strokeWidth: 4 }) : h('ellipse', { cx: 70, cy: 64, rx: 35, ry: 34, fill: '#f5dfc5', stroke: colors.dark, strokeWidth: 2 }),
+          h('path', { d: 'M49 59h6m30 0h6', stroke: colors.dark, strokeWidth: 4, strokeLinecap: 'round' }),
+          h('path', { d: 'M62 77q8 7 16 0', fill: 'none', stroke: colors.dark, strokeWidth: 2, strokeLinecap: 'round' }),
+          h('path', { d: 'm57 96 13 15 13-15', fill: 'none', stroke: colors.gold, strokeWidth: 5 }),
+          h('g', { transform: 'translate(59 116) scale(.9)', fill: 'none', stroke: colors.light, strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }, h('path', { d: GLYPHS[character.icon] || GLYPHS.star })),
+          h('circle', { cx: 111, cy: 27, r: 4, fill: colors.gold }), h('path', { d: 'M20 71h10m-5-5v10', stroke: colors.gold, strokeWidth: 2 })),
+        character.animation === 'orbit' || character.animation === 'spark' ? h('i', { className: 'daj-character-aura', 'aria-hidden': true }) : null);
+    }
+    function ProfileFrame(props) {
+      const data = props.data, settings = props.settings || frameSettings(data);
+      const character = characterFor(data, data && data.equipment && data.equipment.character);
+      const badges = array(data && data.equipment && data.equipment.badges).slice(0, 3).map(function (id) { return definitionFor(data, id) || awardFor(data, id); }).filter(Boolean);
+      const charm = data && data.equipment && charmFor(data, data.equipment.charm);
+      const short = settings.frameHeight <= 40;
+      return h('div', { className: 'daj-account-frame daj-frame-' + settings.frameStyle + (short ? ' daj-frame-short' : ''), style: { height: props.fit ? '100%' : settings.frameHeight + 'px' }, 'data-daj-reduce': reducedMotion(data) ? 'true' : 'false' },
+        character ? h(CharacterArt, { character: character, reduce: reducedMotion(data), size: Math.max(23, Math.min(145, settings.frameHeight - 6)), className: 'daj-frame-character' }) : h('span', { className: 'daj-frame-empty-icon' }, h(Icon, { name: 'medal', size: short ? 18 : 28 })),
+        h('span', { className: 'daj-frame-copy' }, h('strong', null, character ? character.name : '成就手记'),
+          h('span', { className: 'daj-profile-level' }, data ? 'Lv.' + (data.level.isLowerBound || data.level.incomplete ? '≥' : '') + exact(data.level.number) + (short ? '' : ' · ' + allAwards(data).length + ' 枚成就') : '正在连接'),
+          h('span', { className: 'daj-profile-badges' }, badges.length ? badges.map(function (item) { return h('span', { key: item.id, title: presentation(item, data).title }, h(Badge, { item: item, theme: themeId(data), size: 18 })); }) : !short ? h('small', null, character ? THEMES[character.theme] && THEMES[character.theme].role || '旅途同伴' : '等待第一枚纪念') : null)),
+        charm ? h('span', { className: 'daj-profile-charm', title: presentation(charm, data).title }, h(Badge, { item: charm, theme: themeId(data), size: 20 })) : null);
+    }
+    function FrameSettings(props) {
+      const actual = frameSettings(props.data);
+      const [draft, setDraft] = useState(actual);
+      useEffect(function () { setDraft(actual); }, [actual.frameStyle, actual.frameHeight]);
+      const options = [{ id: 'compact', label: '紧凑', height: 32 }, { id: 'standard', label: '标准', height: 64 }, { id: 'showcase', label: '展示', height: 104 }];
+      const changed = draft.frameStyle !== actual.frameStyle || draft.frameHeight !== actual.frameHeight;
+      return h('section', { className: 'daj-frame-settings', 'aria-label': '账户成就框设置' },
+        h('div', { className: 'daj-section-heading' }, h('div', null, h('h3', null, '账户成就框'), h('p', { className: 'daj-hint' }, '在账户入口附近展示角色、等级、勋章和挂件。'))),
+        h('div', { className: 'daj-frame-presets' }, options.map(function (option) {
+          return h('button', { type: 'button', key: option.id, className: 'daj-frame-preset' + (draft.frameStyle === option.id ? ' daj-selected' : ''), disabled: props.busy, 'aria-label': option.label + ' ' + option.height + 'px', 'aria-pressed': draft.frameStyle === option.id, onClick: function () { setDraft({ frameStyle: option.id, frameHeight: option.height }); } },
+            h('span', null, option.label + ' · ' + option.height + 'px'), h(ProfileFrame, { data: props.data, settings: { frameStyle: option.id, frameHeight: option.height } }));
+        })),
+        h('div', { className: 'daj-frame-controls' }, h('label', null, h('span', { className: 'daj-field-label' }, '框样式'), h('select', { id: props.idPrefix + '-frame-style', value: draft.frameStyle, disabled: props.busy, onChange: function (event) { setDraft(Object.assign({}, draft, { frameStyle: event.target.value })); } }, options.map(function (option) { return h('option', { key: option.id, value: option.id }, option.label); }))),
+          h('label', { className: 'daj-grow' }, h('span', { className: 'daj-field-label' }, '高度 · ' + draft.frameHeight + 'px'), h('input', { id: props.idPrefix + '-frame-height', type: 'range', min: 32, max: 160, step: 1, value: draft.frameHeight, disabled: props.busy, onChange: function (event) { setDraft(Object.assign({}, draft, { frameHeight: Math.max(32, Math.min(160, Number(event.target.value) || 32)) })); } })),
+          h(Button, { disabled: props.busy || !changed, onClick: function () { void preferences(draft); } }, '保存展示框')),
+        h('div', { className: 'daj-frame-live-preview', 'aria-label': '展示框实时预览' }, h('small', null, '实时预览 · 保存后应用到账户附近'), h(ProfileFrame, { data: props.data, settings: draft })));
+    }
+    function CharacterEditor(props) {
+      const item = props.item;
+      const [form, setForm] = useState(function () { return item ? { name: item.name, description: item.description || '', theme: item.theme, rarity: item.rarity, icon: item.icon, animation: item.animation, art: item.art } : { name: '', description: '', theme: themeId(props.data), rarity: 'R', icon: 'fox', animation: 'float', art: undefined }; });
+      const [uploading, setUploading] = useState(false);
+      const [error, setError] = useState(null);
+      const reader = useRef(null), live = useRef(true), submission = useRef(null);
+      const info = props.catalog && props.catalog.collection || {};
+      const icons = array(info.iconIds).length ? info.iconIds : Object.keys(ICON_NAMES);
+      const animations = array(info.animationIds).length ? info.animationIds : Object.keys(ANIMATION_NAMES);
+      const owned = item && ownedCharacter(props.data, item.id);
+      const full = !item && customPoolFull(props.data, props.catalog);
+      useEffect(function () { live.current = true; return function () { live.current = false; if (reader.current && reader.current.readyState === 1) reader.current.abort(); }; }, []);
+      function change(key, value) { submission.current = null; setForm(Object.assign({}, form, { [key]: value })); setError(null); }
+      function upload(event) {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+        if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type) || !file.size || file.size > 262144) { setError('请选择不超过 256 KiB 的 PNG、JPEG、GIF 或 WebP 图片。'); return; }
+        if (typeof window.FileReader !== 'function') { setError('当前环境不能读取本机图片。'); return; }
+        if (reader.current && reader.current.readyState === 1) reader.current.abort();
+        const current = new window.FileReader(); reader.current = current; setUploading(true); setError(null);
+        current.onload = function () {
+          if (!live.current || reader.current !== current) return;
+          setUploading(false);
+          if (typeof current.result !== 'string' || !current.result.startsWith('data:' + file.type + ';base64,') || !validArt(current.result)) { setError('图片内容与格式不匹配，无法使用。'); return; }
+          change('art', current.result);
+        };
+        current.onerror = function () { if (live.current && reader.current === current) { setUploading(false); setError('本机图片读取失败，请重试。'); } };
+        current.onabort = function () { if (live.current && reader.current === current) setUploading(false); };
+        current.readAsDataURL(file);
+      }
+      async function save(event) {
+        if (event && event.preventDefault) event.preventDefault();
+        if (props.busy || uploading || full || !form.name.trim()) return;
+        if (!submission.current) {
+          const character = { name: form.name.trim(), description: form.description.trim(), theme: form.theme, rarity: form.rarity, icon: form.icon, animation: form.animation };
+          if (!character.description) delete character.description;
+          if (item) character.id = item.id;
+          if (form.art !== undefined) character.art = form.art;
+          submission.current = { requestId: requestId(), expectedRevision: props.data.revision, characters: [character] };
+        }
+        const ok = await mutate('/characters', submission.current);
+        if (ok && live.current) { submission.current = null; showNotice(item ? '角色外观已保存。' : '角色已加入卡池，抽取后即可佩戴。'); }
+      }
+      const disabled = props.busy || uploading || full;
+      return h('form', { id: 'daj-character-editor', className: 'daj-card daj-section daj-character-editor', onSubmit: save },
+        h('div', { className: 'daj-section-heading' }, h('h3', null, item ? '编辑角色外观' : '手工创作角色'), item ? h(Button, { className: 'daj-text-button', onClick: props.clear }, '新建角色') : null),
+        h('div', { className: 'daj-character-form-preview' }, h(CharacterArt, { character: Object.assign({}, form, { name: form.name || '角色预览' }), reduce: reducedMotion(props.data), size: 112 }), h('span', null, h('strong', null, form.name || '角色预览'), h('small', null, '外观预览 · 保存后加入卡池'))),
+        h('label', null, h('span', { className: 'daj-field-label' }, '角色名字'), h('input', { id: 'daj-character-name', className: 'daj-direction-input', value: form.name, maxLength: 60, required: true, disabled: disabled, onChange: function (event) { change('name', event.target.value); } })),
+        h('label', null, h('span', { className: 'daj-field-label' }, '一句介绍 · 可选'), h('input', { id: 'daj-character-description', className: 'daj-direction-input', value: form.description, maxLength: 240, disabled: disabled, onChange: function (event) { change('description', event.target.value); } })),
+        h('div', { className: 'daj-character-form-grid' },
+          h('label', null, h('span', { className: 'daj-field-label' }, '角色主题'), h('select', { id: 'daj-character-theme', value: form.theme, disabled: disabled || Boolean(owned), onChange: function (event) { change('theme', event.target.value); } }, Object.keys(THEMES).map(function (id) { return h('option', { key: id, value: id }, THEMES[id].name); }))),
+          h('label', null, h('span', { className: 'daj-field-label' }, '稀有度'), h('select', { id: 'daj-character-rarity', value: form.rarity, disabled: disabled || Boolean(owned), onChange: function (event) { change('rarity', event.target.value); } }, RARITIES.map(function (rarity) { return h('option', { key: rarity, value: rarity }, rarity); }))),
+          h('label', null, h('span', { className: 'daj-field-label' }, '角色图标'), h('select', { id: 'daj-character-icon', value: form.icon, disabled: disabled, onChange: function (event) { change('icon', event.target.value); } }, icons.map(function (icon) { return h('option', { key: icon, value: icon }, ICON_NAMES[icon] || icon); }))),
+          h('label', null, h('span', { className: 'daj-field-label' }, '动态效果'), h('select', { id: 'daj-character-animation', value: form.animation, disabled: disabled, onChange: function (event) { change('animation', event.target.value); } }, animations.map(function (animation) { return h('option', { key: animation, value: animation }, ANIMATION_NAMES[animation] || animation); })))),
+        h('label', { className: 'daj-art-upload' }, h('span', { className: 'daj-field-label' }, '上传图片或动图 · 可选'), h('input', { id: 'daj-character-art', type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', disabled: disabled, onChange: upload }), h('small', null, 'PNG / JPEG / GIF / WebP，最多 256 KiB。只在本机读取和保存，不上传到图片服务。')),
+        form.art ? h(Button, { className: 'daj-text-button', disabled: disabled, onClick: function () { change('art', null); } }, '移除上传图片') : null,
+        error ? h('p', { className: 'daj-inline-error', role: 'alert' }, error) : null,
+        full ? h('p', { className: 'daj-hint', role: 'status' }, '自定义卡池已满，仍可编辑已有角色的外观。') : null,
+        h('p', { className: 'daj-hint' }, owned ? '已获得角色可修改外观；主题和稀有度保持原记录。' : '保存会加入相应主题卡池，抽取后才能佩戴。'),
+        h(Button, { className: 'daj-primary daj-wide', disabled: disabled || !form.name.trim(), onClick: save }, uploading ? '正在读取图片…' : item ? '保存角色外观' : '保存角色到卡池'));
+    }
+    function CharacterGenerator(props) {
+      const [selectedTheme, setSelectedTheme] = useState(themeId(props.data));
+      const [direction, setDirection] = useState('');
+      const [style, setStyle] = useState('balanced');
+      const info = props.state.catalog && props.state.catalog.generation;
+      const busy = props.state.generationBusy || props.state.generationLoading || runningJob(props.state.generationJob);
+      const full = customPoolFull(props.data, props.state.catalog);
+      return h('section', { className: 'daj-card daj-section daj-character-generator' }, h('h3', null, '让模型创作角色'), h('p', { className: 'daj-hint' }, '沿用当前或默认模型，生成后自动加入卡池。抽取仍使用成就点。'),
+        h('div', { className: 'daj-direction-row' }, h('label', null, h('span', { className: 'daj-field-label' }, '创作主题'), h('select', { id: 'daj-character-generation-theme', value: selectedTheme, disabled: busy, onChange: function (event) { setSelectedTheme(event.target.value); } }, Object.keys(THEMES).map(function (id) { return h('option', { key: id, value: id }, THEMES[id].name); }))),
+          h('label', { className: 'daj-grow' }, h('span', { className: 'daj-field-label' }, '角色方向 · 可选'), h('input', { id: 'daj-character-generation-direction', className: 'daj-direction-input', value: direction, maxLength: 120, disabled: busy, placeholder: '例如：抱着莲灯的狐狸、星海领航机器人', onChange: function (event) { setDirection(event.target.value); } }))),
+        h('label', null, h('span', { className: 'daj-field-label' }, '创作风格'), h('select', { id: 'daj-character-generation-style', value: style, disabled: busy, onChange: function (event) { setStyle(event.target.value); } }, GENERATION_STYLES.map(function (choice) { return h('option', { key: choice.id, value: choice.id }, choice.label); }))),
+        h(Button, { className: 'daj-primary daj-wide', disabled: busy || full || !info || info.available !== true, onClick: function () { if (!full) void startGeneration({ kind: 'characters', theme: selectedTheme, direction: direction.trim() || undefined, style: style }); } }, busy ? '模型任务进行中…' : '模型生成角色'),
+        full ? h('p', { className: 'daj-hint', role: 'status' }, '自定义卡池已满，仍可编辑已有角色的外观。') : null,
+        info && info.available === false ? h('p', { className: 'daj-hint' }, info.reason || '当前没有可用模型。') : null,
+        h(GenerationStatus, { state: props.state, selectCharacter: props.view, select: function () { openCenter('collection'); } }));
+    }
+    function CharactersPage(props) {
+      const data = props.data, state = props.state, pool = characters(data);
+      const [mode, setMode] = useState('collection'), [selectedTheme, setSelectedTheme] = useState(themeId(data));
+      const [filter, setFilter] = useState('owned'), [themeFilter, setThemeFilter] = useState('all'), [editing, setEditing] = useState(null);
+      const collection = data.collection || {}, points = collection.points || {};
+      const info = state.catalog && state.catalog.collection || {};
+      const cost = finite(info.drawCost) ? info.drawCost : 1;
+      const receipt = state.drawReceipt || array(collection.draws).slice().sort(function (a, b) { return new Date(b.at) - new Date(a.at); })[0];
+      const visible = pool.filter(function (item) { return (filter === 'pool' || Boolean(ownedCharacter(data, item.id))) && (themeFilter === 'all' || item.theme === themeFilter); });
+      function view() { setMode('collection'); setFilter('pool'); }
+      return h(React.Fragment, null,
+        h(PageHeading, { title: '角色收藏', description: '用成就点遇见同伴，让喜欢的角色陪你留在账户旁。' }, h(Button, { onClick: function () { setMode(mode === 'create' ? 'collection' : 'create'); setEditing(null); } }, mode === 'create' ? '返回角色收藏' : '创作角色')),
+        h('section', { className: 'daj-card daj-draw-hero' }, h('div', { className: 'daj-draw-points' }, h('small', null, '可用成就点'), h('strong', null, exact(points.balance)), h('p', null, '每解锁一项成就获得 1 点；每 1 点可十连。')),
+          h('div', { className: 'daj-draw-controls' }, h('label', null, h('span', { className: 'daj-field-label' }, '抽取主题'), h('select', { id: 'daj-draw-theme', value: state.drawRetry && state.drawTheme || selectedTheme, disabled: state.busy || state.drawRetry, onChange: function (event) { setSelectedTheme(event.target.value); } }, Object.keys(THEMES).map(function (id) { return h('option', { key: id, value: id }, THEMES[id].name); }))),
+            h(Button, { className: 'daj-primary', disabled: state.busy || !state.drawRetry && (!finite(points.balance) || points.balance < cost), onClick: function () { void drawCharacters(selectedTheme); } }, state.drawPending ? '正在揭晓…' : state.drawRetry ? '重试这次十连' : '1 成就点 · 十连抽取'),
+            h('small', null, state.drawRetry ? '沿用同一次请求重试，确认原来的结果。' : points.balance === 0 ? '先在日常使用中解锁一项成就，就能开始。' : '十连至少包含 1 位 SR 或更高稀有度角色。'))),
+        receipt ? h('section', { className: 'daj-card daj-section daj-draw-results', 'aria-label': '十连抽取结果' }, h('div', { className: 'daj-section-heading' }, h('h3', null, '最近一次十连'), h('small', { className: 'daj-muted' }, (THEMES[receipt.theme] && THEMES[receipt.theme].name || '') + ' · ' + date(receipt.at, true))),
+          h('div', { className: 'daj-draw-result-grid' }, array(receipt.results).map(function (result, index) { const item = characterFor(data, result.id); return h('div', { key: index, className: 'daj-draw-result daj-rarity-' + result.rarity }, h(CharacterArt, { character: item, reduce: reducedMotion(data), size: 64 }), h('strong', null, item ? item.name : '角色记录同步中'), h('small', null, result.rarity + ' · ' + (result.isNew ? '新角色' : '重复角色'))); }))) : null,
+        mode === 'create' ? h('div', { className: 'daj-character-studio' }, h(CharacterGenerator, { data: data, state: state, view: view }), h(CharacterEditor, { key: editing && editing.id || 'new', item: editing, data: data, catalog: state.catalog, busy: state.busy, clear: function () { setEditing(null); } })) : h(React.Fragment, null,
+          h('div', { className: 'daj-filters' }, [['owned', '已获得'], ['pool', '全部卡池']].map(function (choice) { return h(Button, { key: choice[0], className: 'daj-chip' + (filter === choice[0] ? ' daj-selected' : ''), 'aria-pressed': filter === choice[0], onClick: function () { setFilter(choice[0]); } }, choice[1]); }),
+            h('label', { className: 'daj-character-theme-filter' }, h('span', null, '角色主题'), h('select', { id: 'daj-character-theme-filter', value: themeFilter, onChange: function (event) { setThemeFilter(event.target.value); } }, h('option', { value: 'all' }, '全部主题'), Object.keys(THEMES).map(function (id) { return h('option', { key: id, value: id }, THEMES[id].name); })))),
+          visible.length ? h('div', { className: 'daj-character-grid' }, visible.map(function (item) {
+            const own = ownedCharacter(data, item.id), worn = data.equipment && data.equipment.character === item.id;
+            return h('article', { key: item.id, className: 'daj-card daj-character-card daj-rarity-' + item.rarity + (worn ? ' daj-character-worn' : '') }, h('div', { className: 'daj-character-topline' }, h('span', { className: 'daj-rarity' }, item.rarity), h('small', null, THEMES[item.theme] && THEMES[item.theme].name)),
+              h(CharacterArt, { character: item, reduce: reducedMotion(data), size: 110 }), h('h3', null, item.name), h('p', null, item.description), h('small', { className: 'daj-character-count' }, own ? '已收藏 ' + exact(own.count) + ' 份' : '尚未获得 · 已在卡池'),
+              h(Button, { className: worn ? '' : 'daj-primary', disabled: state.busy || !own, 'aria-label': (worn ? '取下角色 ' : '佩戴角色 ') + item.name, onClick: function () { void mutate('/equip', { id: item.id, slot: 'character', equipped: !worn }); } }, worn ? '正在陪伴 · 取下' : own ? '佩戴角色' : '抽取后可佩戴'),
+              item.source !== 'builtin' ? h(Button, { className: 'daj-text-button', 'aria-label': '编辑角色 ' + item.name, onClick: function () { setEditing(item); setMode('create'); } }, '编辑外观') : null);
+          })) : h('section', { className: 'daj-card' }, h(Empty, { title: filter === 'owned' ? '还没有遇见第一位同伴' : '这个主题的卡池还很安静', icon: 'star', action: h(Button, { onClick: function () { setFilter('pool'); setThemeFilter('all'); } }, '看看全部卡池') }, filter === 'owned' ? '解锁成就积累点数，再来抽取喜欢的主题。' : '可以让模型或自己创作新角色。'))));
     }
     function Progress(props) {
       const progress = ratio(props.value, props.target);
@@ -686,17 +965,18 @@ window.__ModuleLoader__.load({
     }
     function GenerationStatus(props) {
       const state = props.state, job = state.generationJob;
-      const labels = { analyzing: '分析使用记录', generating: '生成成就规则', applying: '校验并自动应用', done: '处理完成' };
+      const characterJob = job && (job.kind === 'characters' || array(job.createdCharacterIds).length > 0);
+      const labels = { analyzing: characterJob ? '分析角色主题' : '分析使用记录', generating: characterJob ? '创作主题角色' : '生成成就规则', applying: characterJob ? '校验并加入卡池' : '校验并自动应用', done: '处理完成' };
       const running = runningJob(job);
-      const createdIds = array(job && job.createdDefinitionIds);
-      const readyId = createdIds.find(function (id) { return definitionFor(state.data, id); });
+      const createdIds = array(job && (characterJob ? job.createdCharacterIds : job.createdDefinitionIds));
+      const readyId = createdIds.find(function (id) { return characterJob ? characterFor(state.data, id) : definitionFor(state.data, id); });
       return h(React.Fragment, null,
         job ? h('section', { className: 'daj-generation-status daj-generation-' + job.status, role: 'status', 'aria-live': 'polite', 'aria-atomic': true },
-          h('div', { className: 'daj-row' }, h(Icon, { name: job.status === 'succeeded' ? 'check' : job.status === 'failed' ? 'flag' : 'spark', size: 18 }), h('strong', { className: 'daj-grow' }, running ? labels[job.stage] || '生成任务进行中' : job.status === 'succeeded' ? '已生成并应用 ' + array(job.createdDefinitionIds).length + ' 项成就' : job.status === 'cancelled' ? '已取消本次生成' : '本次生成未完成'),
+          h('div', { className: 'daj-row' }, h(Icon, { name: job.status === 'succeeded' ? 'check' : job.status === 'failed' ? 'flag' : 'spark', size: 18 }), h('strong', { className: 'daj-grow' }, running ? labels[job.stage] || '生成任务进行中' : job.status === 'succeeded' ? characterJob ? '已生成并加入卡池 ' + createdIds.length + ' 位角色' : '已生成并应用 ' + createdIds.length + ' 项成就' : job.status === 'cancelled' ? '已取消本次生成' : '本次生成未完成'),
             running ? h(Button, { className: 'daj-text-button', disabled: state.generationBusy || job.stage === 'applying', onClick: function () { void cancelGeneration(); } }, job.stage === 'applying' ? '正在应用' : '取消生成') : null),
           running ? h('div', { className: 'daj-job-progress', role: 'progressbar', 'aria-label': '成就生成进度', 'aria-valuetext': labels[job.stage] || job.message || '正在处理' }, h('i')) : null,
           job.message ? h('p', null, job.message) : null,
-          job.status === 'succeeded' && createdIds.length ? h(Button, { className: 'daj-text-button', disabled: !readyId, onClick: function () { if (readyId) props.select(readyId); } }, readyId ? '查看新成就' : '正在同步新成就…', h(Icon, { name: 'chevron', size: 12 })) : null,
+          job.status === 'succeeded' && createdIds.length ? h(Button, { className: 'daj-text-button', disabled: !readyId, onClick: function () { if (!readyId) return; if (characterJob) { if (props.selectCharacter) props.selectCharacter(readyId); else openCenter('characters'); } else props.select(readyId); } }, readyId ? characterJob ? '查看新角色' : '查看新成就' : '正在同步新记录…', h(Icon, { name: 'chevron', size: 12 })) : null,
           finite(job.totalTokens) ? h('small', null, '本次生成模型用量 · ' + exact(job.totalTokens) + ' token') : null) : null,
         state.generationError ? h('div', { className: 'daj-inline-error', role: 'alert' }, h('span', null, state.generationError), h(Button, { className: 'daj-text-button', disabled: state.generationBusy, onClick: function () { void refreshGeneration(job && job.id); } }, '重试任务同步')) : null);
     }
@@ -728,6 +1008,7 @@ window.__ModuleLoader__.load({
       const charms = array(props.catalog && props.catalog.equipment && props.catalog.equipment.charms);
       const equippedCharm = data.equipment && data.equipment.charm;
       return h('section', { className: 'daj-preferences', 'aria-label': '主题与反馈设置' },
+        h(FrameSettings, { data: data, busy: props.busy, idPrefix: props.idPrefix }),
         charms.length ? h('div', { className: 'daj-preference-row' }, h('label', { htmlFor: props.idPrefix + '-charm' }, h('strong', null, '随身挂件'), h('small', null, '选一件小装饰，也可以从收藏里佩戴已获得的成就。')),
           h('select', { id: props.idPrefix + '-charm', value: equippedCharm || 'none', disabled: props.busy, onChange: function (event) { void mutate('/equip', { id: event.target.value, slot: 'charm', equipped: event.target.value !== 'none' }); } },
             h('option', { value: 'none' }, '暂不佩戴'), charms.map(function (id) { return h('option', { key: id, value: id }, CHARM_NAMES[id] || id); }),
@@ -773,7 +1054,7 @@ window.__ModuleLoader__.load({
       const [settingsOpen, setSettingsOpen] = useState(false);
       const [selection, setSelection] = useState(null);
       useDialogFocus(panel, function () { if (settingsOpen) setSettingsOpen(false); else closeCenter(); });
-      useEffect(function () { if (body.current) body.current.scrollTop = 0; }, [state.tab]);
+      useEffect(function () { if (body.current) body.current.scrollTop = 0; }, [state.tab, settingsOpen]);
       const t = theme(data);
       function navigate(tab) { publish({ tab: tab }); }
       function select(id) { setSelection(id); navigate('collection'); }
@@ -797,6 +1078,7 @@ window.__ModuleLoader__.load({
               state.tab === 'collection' ? h(Collection, { data: data, busy: state.busy, selected: selection }) : null,
               state.tab === 'model' ? h(ModelConfiguration, { data: data, state: state, catalog: state.catalog, catalogError: state.catalogError, select: select }) : null,
               state.tab === 'history' ? h(History, { data: data, select: select }) : null,
+              state.tab === 'characters' ? h(CharactersPage, { data: data, state: state }) : null,
               h('footer', { className: 'daj-page-footer' }, h('span', null, h(Icon, { name: 'check', size: 12 }), '个人积累，留在自己的手记里'), h('span', null, state.connected ? '已同步 · ' + date(data.updatedAt, true) : '等待重新连接')))
               : h(Empty, { title: state.loading ? '正在翻开你的手记…' : '暂时还没连接上手记', icon: 'book' }, state.loading ? '正在读取本机已保存的真实记录。' : '请重试连接，或检查插件是否已在宿主中启用。'))));
     }
@@ -848,15 +1130,11 @@ window.__ModuleLoader__.load({
     }
     function SidebarEntry(props) {
       const state = useJournal(), data = state.data;
-      const badges = array(data && data.equipment && data.equipment.badges).slice(0, 3).map(function (id) { return definitionFor(data, id) || awardFor(data, id); }).filter(Boolean);
-      const charm = data && data.equipment && charmFor(data, data.equipment.charm);
+      const frame = frameSettings(data);
       const narrow = props.wide === false;
       return h(React.Fragment, null,
-        h('button', { type: 'button', className: 'daj-surface daj-profile-strip' + (narrow ? ' daj-profile-narrow' : ''), 'data-daj-theme': themeId(data), title: '打开成就手记', 'aria-label': '打开成就手记', onClick: function () { openCenter('overview'); } },
-          narrow ? h(Icon, { name: 'medal', size: 17 }) : h(React.Fragment, null,
-            h('span', { className: 'daj-profile-level' }, data ? 'Lv.' + (data.level.isLowerBound || data.level.incomplete ? '≥' : '') + exact(data.level.number) : state.loading ? '…' : '—'),
-            badges.length ? h('span', { className: 'daj-profile-badges' }, badges.map(function (item) { return h('span', { key: item.id, title: presentation(item, data).title }, h(Badge, { item: item, theme: themeId(data), size: 18 })); })) : h('span', { className: 'daj-profile-empty' }, h(Icon, { name: 'medal', size: 14 }), '成就手记'),
-            charm ? h('span', { className: 'daj-profile-charm', title: presentation(charm, data).title }, h(Badge, { item: charm, theme: themeId(data), size: 16 })) : null)),
+        h('button', { type: 'button', className: 'daj-surface daj-profile-strip' + (narrow ? ' daj-profile-narrow' : ''), style: { height: narrow ? '22px' : frame.frameHeight + 'px' }, 'data-daj-theme': themeId(data), 'data-daj-reduce': reducedMotion(data) ? 'true' : 'false', title: '打开成就手记', 'aria-label': '打开成就手记', onClick: function () { openCenter('overview'); } },
+          narrow ? h(Icon, { name: 'medal', size: 17 }) : h(ProfileFrame, { data: data, settings: frame, fit: true })),
         h(GlobalSurface));
     }
     function SettingsSection() {
@@ -879,6 +1157,11 @@ window.__ModuleLoader__.load({
       clientContext = ctx;
       active = true; generation += 1;
       snapshot = initialState();
+      try {
+        const savedDraw = JSON.parse(window.sessionStorage.getItem('dsh-achievement-journal.draw') || 'null');
+        if (savedDraw && typeof savedDraw.id === 'string' && savedDraw.id.length <= 256 && THEMES[savedDraw.theme]) { pendingDrawId = savedDraw.id; pendingDrawTheme = savedDraw.theme; }
+      } catch (_error) { /* Browser storage can be unavailable. */ }
+      snapshot.drawRetry = Boolean(pendingDrawId); snapshot.drawTheme = pendingDrawTheme;
       actionCount = 0; needsBaseline = true; baselineRefreshPending = false; journalIdentity = null;
       seenNotifications.clear(); surfaceOwners.clear();
       const style = document.createElement('style');
@@ -892,6 +1175,12 @@ window.__ModuleLoader__.load({
       }
       slot('settings.section', 'dsh-achievement-journal', 210, SettingsSection, { label: '成就手记' });
       slot('sidebar.footer.action', 'dsh-achievement-journal-entry', 9990, SidebarEntry);
+      if (typeof window.matchMedia === 'function') {
+        const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const motion = function () { publish({ motionVersion: snapshot.motionVersion + 1 }); };
+        if (typeof media.addEventListener === 'function') { media.addEventListener('change', motion); disposers.push(function () { media.removeEventListener('change', motion); }); }
+        else if (typeof media.addListener === 'function') { media.addListener(motion); disposers.push(function () { media.removeListener(motion); }); }
+      }
       try {
         const service = optionalClientService('uiSession');
         const source = service && service.adapter && service.adapter.current;
@@ -919,7 +1208,7 @@ window.__ModuleLoader__.load({
         window.removeEventListener('online', reconnect);
         disposers.forEach(function (dispose) { dispose(); });
         style.remove();
-        listeners.clear(); surfaceOwners.clear(); seenNotifications.clear();
+        listeners.clear(); surfaceOwners.clear(); seenNotifications.clear(); staticArtCache.clear();
         flight = null; catalogFlight = null; generationFlight = null; clientContext = null; actionCount = 0;
       }; }, 'dsh-achievement-journal client cleanup');
     }

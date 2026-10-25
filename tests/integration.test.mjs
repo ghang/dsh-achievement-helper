@@ -36,6 +36,9 @@ test('native AgentLoop → real tools → journal: model config, file sequence, 
       { title: '一轮新章', rule: { template: 'count', metric: 'turn_completed', target: 1 } },
       { title: '项目纪念', rule: { template: 'model_report' } },
     ] } }] },
+    { calls: [{ id: 'characters', name: 'achievement_configure', input: { requestId: 'integration-character', characters: [
+      { name: '原生模型灵舟', theme: 'xianxia', rarity: 'SR', icon: 'star', animation: 'float' },
+    ] } }] },
     { calls: [{ id: 'read', name: 'read', input: { file_path: 'fixture.ts' } }] },
     { calls: [{ id: 'edit', name: 'edit', input: { file_path: 'fixture.ts', old_string: 'value = 1', new_string: 'value = 2' } }] },
     { calls: [{ id: 'present', name: 'present', input: { files: [{ path: 'fixture.ts' }] } }] },
@@ -61,9 +64,12 @@ test('native AgentLoop → real tools → journal: model config, file sequence, 
   await agent.whenIdle();
   await eventually(() => service.snapshot().totals.turns === 1);
   const s = service.snapshot();
-  assert.equal(upstream.requests.length, 6);
+  assert.equal(upstream.requests.length, 7);
   assert.match(await readFile(join(dir, 'fixture.ts'), 'utf8'), /value = 2/);
-  assert.equal(s.totals.tokens, 6 * 310);
+  assert.equal(s.totals.tokens, 7 * 310);
+  assert.ok(s.collection.characters.some(c => c.name === '原生模型灵舟' && c.source === 'model'));
+  assert.equal(s.collection.owned.length, 0, 'A model configures pool definitions without granting cards');
+  assert.equal(s.collection.points.balance, s.awards.length);
   assert.equal(s.totals.fileReads, 1); assert.equal(s.totals.fileChanges, 1); assert.equal(s.totals.presentations, 1);
   assert.ok(s.awards.some(a => a.rule?.recipe === 'read_then_change'));
   assert.ok(s.awards.some(a => a.title === '一轮新章'));

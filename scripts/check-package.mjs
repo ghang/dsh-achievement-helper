@@ -34,7 +34,7 @@ run('/usr/bin/tar', ['-xzf', archive, '-C', extracted]);
 const artifact = join(extracted, 'package');
 // Tests use only the unpacked code; the same locked dev runtime supplies peers.
 run('/bin/ln', ['-s', join(root, 'node_modules'), join(artifact, 'node_modules')]);
-const artifactTests = run(process.execPath, ['--test', '--test-reporter=tap', 'tests/integration.test.mjs', 'tests/http.test.mjs', 'tests/generation-integration.test.mjs'], { JOURNAL_ARTIFACT: artifact });
+const artifactTests = run(process.execPath, ['--test', '--test-reporter=tap', 'tests/integration.test.mjs', 'tests/http.test.mjs', 'tests/collection-http.test.mjs', 'tests/generation-integration.test.mjs'], { JOURNAL_ARTIFACT: artifact });
 await writeFile(join(out, 'artifact-tests.tap'), artifactTests);
 assert.match(artifactTests, /# fail 0/); assert.match(artifactTests, /# skipped 0/);
 const bytes = await readFile(archive); const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));

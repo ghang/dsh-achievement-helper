@@ -1,5 +1,5 @@
 import z from '@deepseek-ai/schemastery';
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, createHash, randomBytes } from 'node:crypto';
 import { open, mkdir, unlink, lstat } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -8,6 +8,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools';
 import { createJournal } from './journal.mjs';
 import { createCollector } from './collector.mjs';
 import { createGenerationController } from './generation.mjs';
+import { THEME_IDS, ICON_IDS, ANIMATION_IDS } from './collection.mjs';
 
 export const name = 'achievement-journal';
 export const inject = ['tools', 'sessions', 'webServer', 'connection', 'llm'];
@@ -19,6 +20,14 @@ const METRICS = ['tokens', 'turn_completed', 'file_read', 'file_changed', 'forma
   'delegate_completed', 'file_presented', 'route_used', 'recall_used', 'recipe', 'model_report'];
 const TEMPLATES = ['count', 'distinct', 'first_seen', 'recipe', 'model_report'];
 const RECIPES = ['read_then_change', 'skill_then_change', 'delegate_then_present', 'recall_then_change', 'search_read_change'];
+const COLLECTION_ERRORS = {
+  NOT_ENOUGH_POINTS: '解锁一枚成就获得 1 点，即可进行十连抽取。',
+  CHARACTER_NOT_OWNED: '抽中后才能佩戴这位角色。',
+  BUILTIN_CHARACTER_IMMUTABLE: '预设角色不能修改，可以新建自己的角色。',
+  CHARACTER_POOL_IMMUTABLE: '已获得角色保留主题和稀有度，可以修改名字与外观。',
+  INVALID_ART: '请选择 256 KiB 以内的 PNG、JPEG、GIF 或 WebP 图片。',
+  RANDOM_UNAVAILABLE: '本次抽取未完成，成就点没有扣除，请重试。',
+};
 function optionalService(ctx, name) {
   try { const service = ctx.get?.(name); if (service !== undefined) return service; } catch { /* optional provider */ }
   try { return ctx[name]; } catch { return undefined; }
@@ -28,12 +37,12 @@ const json = (res, status, value) => {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
   res.end(JSON.stringify(value));
 };
-async function bodyOf(req) {
+async function bodyOf(req, limit = 65536) {
   if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) throw error('需要 application/json。', 415);
   const chunks = []; let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 65536) throw error('配置超过 64 KiB。', 413);
+    if (size > limit) throw error(`配置超过 ${Math.ceil(limit / 1024)} KiB。`, 413);
     chunks.push(chunk);
   }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
@@ -77,12 +86,13 @@ async function recoverDeadWriter(file) {
 function unavailableJournal() {
   const failure = () => Promise.reject(error('成就档案暂不可用，原数据已保留。', 503, 'JOURNAL_STORAGE'));
   return { snapshot: () => ({ revision: 0, createdAt: null, updatedAt: null,
-    preferences: { theme: 'xianxia', notifications: 'all', reducedMotion: 'system' }, totals: {},
+    preferences: { theme: 'xianxia', notifications: 'all', reducedMotion: 'system', frameStyle: 'standard', frameHeight: 64 }, totals: {},
     level: { number: 1, current: null, next: null, progress: null, incomplete: true },
-    definitions: [], awards: [], timeline: [], notifications: [], equipment: { badges: [], charm: null },
+    definitions: [], awards: [], timeline: [], notifications: [], equipment: { badges: [], charm: null, character: null },
+    collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [], owned: [], draws: [] },
     storage: { status: 'unavailable', message: '档案加载失败，原数据已保留；请停止其它写入进程或修复存储后重新启用。' } }),
     catalog: () => ({ metrics: [], templates: [], available: false }),
-    ingest: failure, configure: failure, report: failure, preferences: failure, equip: failure, close: async () => {},
+    ingest: failure, configure: failure, configureCharacters: failure, draw: failure, drawReceipt: () => null, report: failure, preferences: failure, equip: failure, close: async () => {},
   };
 }
 
@@ -95,7 +105,7 @@ const definitionSchema = {
     icon: { type: 'string', description: 'A catalog icon key.' },
     category: { type: 'string', description: 'A catalog category.' },
     hidden: { type: 'boolean', description: 'Optional discovery achievement; condition is visible after unlock.' },
-    themes: { type: 'object', additionalProperties: false, properties: Object.fromEntries(['explorer', 'xianxia', 'cyber'].map(theme => [theme, {
+    themes: { type: 'object', additionalProperties: false, properties: Object.fromEntries(THEME_IDS.map(theme => [theme, {
       type: 'object', additionalProperties: false, properties: {
         title: { type: 'string', required: true }, description: { type: 'string' },
       },
@@ -110,6 +120,18 @@ const definitionSchema = {
         recipe: { type: 'string', enum: RECIPES },
       },
     },
+  },
+};
+const characterSchema = {
+  type: 'object', additionalProperties: false,
+  properties: {
+    id: { type: 'string', description: 'Existing custom character id when changing presentation; omit for a new pool entry.' },
+    name: { type: 'string', required: true, description: 'Short character or artifact name matching the chosen theme.' },
+    description: { type: 'string', description: 'Short original character description; never include secrets.' },
+    theme: { type: 'string', required: true, enum: THEME_IDS },
+    rarity: { type: 'string', required: true, enum: ['N', 'R', 'SR', 'SSR'] },
+    icon: { type: 'string', required: true, enum: ICON_IDS },
+    animation: { type: 'string', required: true, enum: ANIMATION_IDS },
   },
 };
 const toolOutput = {
@@ -218,7 +240,12 @@ export async function createAchievementJournal(ctx, config = {}) {
   try {
     generation = await createGenerationController({ ctx, journal, collector, catalog, apply: async (input, access) => {
       if (disposed || closing) throw error('成就手记正在关闭。', 503);
-      const applied = await journal.configure(input, access); remember(applied); return applied;
+      let applied;
+      if (input.kind === 'characters') {
+        const { kind, ...charactersInput } = input;
+        applied = await journal.configureCharacters(charactersInput, access);
+      } else applied = await journal.configure(input, access);
+      remember(applied); return applied;
     },
       recordUsage: recordGenerationUsage, file: statePath + '.generation-v1.json', hashKey, now });
   } catch {
@@ -231,21 +258,34 @@ export async function createAchievementJournal(ctx, config = {}) {
       const dispose = ctx.tools.register(defineTool({ ...definition, output: toolOutput }));
       if (typeof dispose === 'function') disposers.push(dispose);
     };
-    register({ name: 'achievement_catalog', description: 'Query supported achievement metrics, rule recipes, icons, themes and observation coverage before configuring achievements. This does not trigger model calls.',
+    register({ name: 'achievement_catalog', description: 'Query supported achievement rules, themes, collection characters, rarity probabilities and animation presets before configuring. This does not trigger model calls or spend points.',
       parameters: {}, execute: async (_args, exec) => ({ ...catalog(exec.agent), generation: await generation.info({ sessionId: exec.agent?.session.id }) }) });
     register({ name: 'achievement_query', description: 'Read personal achievement progress and earned records. Token totals are observed use, not business quality or acceptance.',
-      parameters: { id: { type: 'string', description: 'Optional definition id.' }, history: { type: 'boolean', description: 'Include the most recent 20 records.' } },
+      parameters: { id: { type: 'string', description: 'Optional definition id.' }, history: { type: 'boolean', description: 'Include the most recent 20 records.' }, collection: { type: 'boolean', description: 'Include point balance, owned character counts and character metadata; images are omitted.' } },
       execute: args => { const s = state(); return { revision: s.revision, preferences: s.preferences, totals: s.totals, level: s.level,
         definitions: s.definitions.filter(d => !args.id || d.id === args.id).slice(0, 64), coverage: s.coverage,
-        ...(args.history ? { timeline: (s.timeline ?? []).slice(0, 20), awards: (s.awards ?? []).slice(-20) } : {}) }; } });
-    register({ name: 'achievement_configure', description: 'Create/update/archive themed achievements through supported bounded rules. Use catalog first. New rules count only future observed activity. This configures conditions; it does not grant automatic achievements. Never fabricate token usage or user acceptance.',
+        ...(args.history ? { timeline: (s.timeline ?? []).slice(0, 20), awards: (s.awards ?? []).slice(-20) } : {}),
+        ...(args.collection ? { collection: { points: s.collection.points, owned: s.collection.owned,
+          characters: s.collection.characters.slice(0, 128).map(({ art, ...metadata }) => metadata) } } : {}) }; } });
+    register({ name: 'achievement_configure', description: 'Configure bounded achievement rules OR themed character pool entries, one kind per write. Query catalog first. Characters are definitions only: this never grants cards, draws, or changes points. New achievement rules count future observed activity. Never fabricate token use or user acceptance.',
       parameters: {
         requestId: { type: 'string', required: true, description: 'Unique stable id for this write; reuse unchanged on retry.' },
         expectedRevision: { type: 'integer', description: 'Revision from achievement_query for conflict protection.' },
         definitions: { type: 'array', items: definitionSchema, description: 'At most 20 new/updated definitions per write.' },
+        characters: { type: 'array', items: characterSchema, description: 'Alternatively configure up to 8 themed character pool entries. No image URLs, scripts or raw SVG; use icon and animation catalog keys.' },
         archiveIds: { type: 'array', items: { type: 'string' }, description: 'Archive unfinished goals; preserve earned history.' },
-        theme: { type: 'string', enum: ['explorer', 'xianxia', 'cyber'] },
+        theme: { type: 'string', enum: THEME_IDS },
       }, execute: async (args, exec) => {
+        if (args.characters !== undefined) {
+          if (args.definitions !== undefined || args.archiveIds !== undefined || args.theme !== undefined) throw error('角色与成就请分两次配置。');
+          if (!Array.isArray(args.characters) || args.characters.length > 8) throw error('每次最多配置 8 个角色。');
+          if (args.characters.some(c => c && Object.hasOwn(c, 'art'))) throw error('模型角色请使用目录中的图标和动画预设。');
+          const prefix = createHash('sha256').update(args.requestId).digest('hex').slice(0, 16);
+          const requested = new Set(args.characters.map((c, i) => c.id || `character-${prefix}-${i + 1}`));
+          const s = await mutate('configureCharacters', args, context(exec));
+          return { revision: s.revision, collection: { points: s.collection.points,
+            characters: s.collection.characters.filter(c => requested.has(c.id)).map(({ art, ...metadata }) => metadata) } };
+        }
         const before = new Map(journal.snapshot().definitions.map(d => [d.id, d.revision]));
         const s = await mutate('configure', args, context(exec));
         const requested = new Set([...(args.definitions ?? []).map(d => d.id), ...(args.archiveIds ?? [])]);
@@ -275,6 +315,11 @@ export async function createAchievementJournal(ctx, config = {}) {
           if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host) throw error('来源不匹配。', 403);
           if (path === API + '/generation') return json(res, 200, await generation.start(await bodyOf(req)));
           if (path === API + '/generation/cancel') { const body = await bodyOf(req); return json(res, 200, await generation.cancel(body.id)); }
+          if (path === API + '/draw') {
+            const body = await bodyOf(req); const snapshot = await mutate('draw', body);
+            return json(res, 200, { ...snapshot, draw: journal.drawReceipt(body.requestId) });
+          }
+          if (path === API + '/characters') return json(res, 200, await mutate('configureCharacters', await bodyOf(req, 3 * 1024 * 1024)));
           const method = ({ preferences: 'preferences', equip: 'equip', configure: 'configure', report: 'report' })[path.slice(API.length + 1)];
           if (method) return json(res, 200, await mutate(method, await bodyOf(req)));
         }
@@ -282,8 +327,8 @@ export async function createAchievementJournal(ctx, config = {}) {
       } catch (e) {
         const code = String(e.code);
         const storageError = ['PERSISTENCE_FAILED', 'DURABILITY_UNCERTAIN', 'CORRUPT_STATE', 'SCHEMA_UNSUPPORTED', 'LOCK_HELD', 'CLOSED', 'BUDGET_EXCEEDED', 'COUNTER_OVERFLOW'].includes(code);
-        const status = e.status ?? (storageError ? 503 : /CONFLICT|ARCHIVED|IMMUTABLE|REQUEST_ID_REUSED/.test(code) ? 409 : e.name === 'JournalError' || code.includes('INVALID') ? 400 : 500);
-        json(res, status, { error: code.startsWith('GENERATION_') || status < 500 ? e.message : '成就存储暂不可用，已保留原档案，请查看宿主日志。', code: e.code ?? 'JOURNAL_UNAVAILABLE' });
+        const status = e.status ?? (storageError ? 503 : /CONFLICT|ARCHIVED|IMMUTABLE|REQUEST_ID_REUSED|INSUFFICIENT_POINTS|NOT_OWNED/.test(code) ? 409 : e.name === 'JournalError' || code.includes('INVALID') ? 400 : 500);
+        json(res, status, { error: COLLECTION_ERRORS[code] || (code.startsWith('GENERATION_') || status < 500 ? e.message : '成就存储暂不可用，已保留原档案，请查看宿主日志。'), code: e.code ?? 'JOURNAL_UNAVAILABLE' });
       }
     } }));
   }

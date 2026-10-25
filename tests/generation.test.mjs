@@ -10,6 +10,9 @@ import { createJournal } from '../src/journal.mjs';
 const digest = value => createHash('sha256').update(String(value)).digest('hex');
 const request = (id, extra = {}) => ({ requestId: id, metrics: ['file_read'], theme: 'xianxia', style: 'balanced', ...extra });
 const definition = (rule = { template: 'count', metric: 'file_read', target: 3 }, extra = {}) => ({ title: '阅卷有迹', description: '配置后实际阅读三次文件。', icon: 'book', rule, ...extra });
+const characterRequest = (requestId, extra = {}) => ({ requestId, kind: 'characters', theme: 'xianxia', ...extra });
+const character = (extra = {}) => ({ name: '云归', description: '披月而来的小小旅伴。', theme: 'xianxia', rarity: 'R', icon: 'fox', animation: 'float', ...extra });
+const characterOutput = characters => JSON.stringify({ characters: characters ?? [character()] });
 const usage = { inputTokens: 10, outputTokens: 15, cacheReadTokens: 20, cacheWriteTokens: 5, totalTokens: 50, reasoningTokens: 4 };
 const output = definitions => JSON.stringify({ definitions: definitions ?? [definition()] });
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
@@ -38,7 +41,12 @@ async function fixture(t, overrides = {}) {
     } }, ...overrides.ctx };
   const options = { ctx, journal, catalog: (...args) => overrides.catalog ? overrides.catalog(...args, dataCatalog) : dataCatalog, file, hashKey: digest,
     ...(overrides.now ? { now: overrides.now } : {}),
-    apply: async (payload, context) => { applies.push({ payload, context }); if (overrides.apply) return overrides.apply(payload, context, journal); return journal.configure(payload, context); },
+    apply: async (payload, context) => {
+      applies.push({ payload, context });
+      if (overrides.apply) return overrides.apply(payload, context, journal);
+      if (payload.kind === 'characters') { const { kind, ...input } = payload; return journal.configureCharacters(input, context); }
+      return journal.configure(payload, context);
+    },
     recordUsage: async receipt => { receipts.push(receipt); if (overrides.recordUsage) return overrides.recordUsage(receipt); },
   };
   let controller = await createGenerationController(options);
@@ -366,4 +374,237 @@ test('optional Cordis services use get before protected getters for default and 
   assert.equal(f.calls.length, 2); assert.equal(f.calls[0].model, 'default-model'); assert.equal(f.calls[1].model, 'selected-model');
   assert.equal(forbiddenReads, 0);
   for (const name of services.keys()) assert.ok(lookedUp.includes(name), `${name} must be resolved through public get`);
+});
+
+test('character generation uses catalog presets and name summaries without reading art or granting ownership', async t => {
+  const f = await fixture(t, { stream: () => chunks(characterOutput()) });
+  await f.journal.configureCharacters({ requestId: 'existing-character', characters: [character({ name: '旧友' })] }, { source: 'user' });
+  const originalSnapshot = f.journal.snapshot;
+  let forbiddenArtReads = 0;
+  f.journal.snapshot = () => {
+    const result = originalSnapshot();
+    for (const item of result.collection.characters) Object.defineProperty(item, 'art', { enumerable: true, get() { forbiddenArtReads++; assert.fail('generator must not read or serialize character art'); } });
+    return result;
+  };
+  const before = originalSnapshot();
+  const input = characterRequest('characters-once', { direction: '清淡的山间旅伴' });
+  const started = await f.c.start(input);
+  assert.equal(started.job.kind, 'characters');
+  const job = await waitFor(f.c);
+  assert.equal(job.status, 'succeeded', JSON.stringify(job));
+  assert.deepEqual(job.createdDefinitionIds, []); assert.equal(job.createdCharacterIds.length, 1);
+  const after = originalSnapshot();
+  assert.equal(after.collection.characters.length, before.collection.characters.length + 1);
+  assert.equal(after.collection.characters.find(item => item.id === job.createdCharacterIds[0]).source, 'model');
+  assert.equal(after.collection.characters.find(item => item.id === job.createdCharacterIds[0]).name, '云归');
+  assert.deepEqual(after.definitions, before.definitions);
+  assert.equal(after.totals.tokens, before.totals.tokens); assert.equal(after.totals.turns, 0);
+  for (const key of ['owned', 'ownedCharacters', 'wallet', 'points', 'balance', 'draws', 'drawHistory']) assert.deepEqual(after.collection[key], before.collection[key], `${key} must not be granted or spent by generation`);
+  assert.equal(forbiddenArtReads, 0);
+  const sent = JSON.parse(f.calls[0].messages[0].content[0].text);
+  assert.equal(sent.theme, 'xianxia'); assert.equal(sent.direction, input.direction);
+  assert.ok(sent.existingNames.names.includes('旧友'));
+  assert.deepEqual(sent.allowed.iconIds, f.dataCatalog.collection.iconIds);
+  assert.deepEqual(sent.allowed.animationIds, f.dataCatalog.collection.animationIds);
+  assert.deepEqual(sent.allowed.rarities, ['N', 'R', 'SR', 'SSR']);
+  for (const key of ['metrics', 'recordedCounts', 'art', 'owned', 'wallet', 'history']) assert.equal(sent[key], undefined);
+  assert.deepEqual(f.calls[0].tools, []); assert.equal(f.calls[0].messages.length, 1);
+  assert.deepEqual(Object.keys(f.applies[0].payload).sort(), ['characters', 'expectedRevision', 'kind', 'requestId']);
+  assert.equal(f.applies[0].context.source, 'model');
+  assert.equal(f.receipts[0].usageSource, 'auxiliary_generation'); assert.equal(job.totalTokens, 50);
+  const stored = JSON.parse(await readFile(f.file, 'utf8'));
+  assert.equal(stored.jobs[0].summary.kind, 'characters');
+  assert.ok(!JSON.stringify(stored).includes(input.direction));
+  assert.equal((await f.c.start({ ...input, metrics: [], style: 'balanced' })).job.id, job.id);
+  await f.reopen(); assert.equal((await f.c.start(input)).job.id, job.id);
+  await assert.rejects(f.c.start({ ...input, kind: 'achievements', metrics: ['tokens'], style: 'balanced' }), { code: 'GENERATION_REQUEST_ID_REUSED' });
+  assert.equal(f.calls.length, 1);
+});
+
+test('character output rejects assets, grants, off-catalog choices, wrong themes and duplicate names', async t => {
+  let raw = characterOutput();
+  const f = await fixture(t, { stream: () => chunks(raw) });
+  const before = f.journal.snapshot();
+  const invalid = [
+    { definitions: [definition()] },
+    { characters: [character()], balance: 100 },
+    { characters: [] },
+    { characters: Array.from({ length: 9 }, (_, i) => character({ name: `角色 ${i}` })) },
+    { characters: [character(), character()] },
+    ...[
+      { id: 'builtin:replace' }, { art: 'data:image/png;base64,iVBORw0KGgo=' },
+      { svg: '<svg></svg>' }, { url: 'https://example.invalid/image.png' },
+      { owned: true }, { points: 100 }, { theme: 'cyber' }, { rarity: 'UR' },
+      { icon: 'outside-catalog' }, { animation: 'execute' },
+      { description: 'https://example.invalid/image.png' },
+      { description: '<svg onload="alert(1)"></svg>' },
+      { description: 'data:image/gif;base64,R0lGODlh' },
+      { description: 'UklGRiIAAABXRUJQVlA4' },
+      { description: '<script>alert(1)</script>' }, { name: '' },
+    ].map(change => ({ characters: [character(change)] })),
+  ];
+  for (const [index, value] of invalid.entries()) {
+    raw = JSON.stringify(value);
+    await f.c.start(characterRequest(`invalid-character-${index}`));
+    const job = await waitFor(f.c);
+    assert.equal(job.status, 'failed', `character case ${index}`);
+    assert.deepEqual(job.createdCharacterIds, []); assert.deepEqual(job.createdDefinitionIds, []);
+  }
+  assert.equal(f.applies.length, 0);
+  assert.deepEqual(f.journal.snapshot().collection, before.collection);
+});
+
+test('character presets and all ten themes come from the current catalog before a model call', async t => {
+  const f = await fixture(t, { stream: () => chunks(characterOutput([character({ theme: 'space', name: '星湾旅伴', icon: 'ship', animation: 'orbit' })])) });
+  assert.equal(f.dataCatalog.themeIds.length, 10);
+  await f.c.start(characterRequest('space-character', { theme: 'space' }));
+  assert.equal((await waitFor(f.c)).status, 'succeeded');
+  f.dataCatalog.themeIds = f.dataCatalog.themeIds.filter(theme => theme !== 'space');
+  await assert.rejects(f.c.start(characterRequest('removed-theme', { theme: 'space' })), { code: 'GENERATION_SOURCE_UNAVAILABLE' });
+  const icons = f.dataCatalog.collection.iconIds; f.dataCatalog.collection.iconIds = [];
+  await assert.rejects(f.c.start(characterRequest('missing-role-presets')), { code: 'GENERATION_SOURCE_UNAVAILABLE' });
+  f.dataCatalog.collection.iconIds = icons;
+  await assert.rejects(f.c.start(characterRequest('role-image-direction', { direction: '参考 https://example.invalid/role.png' })), { code: 'GENERATION_OUTPUT' });
+  assert.equal(f.calls.length, 1);
+});
+
+test('character generation tolerates counter, equipment and collection progress while applying at the latest revision', async t => {
+  const entered = deferred(), proceed = deferred(); let raced = false;
+  const f = await fixture(t, {
+    stream: async function* () { entered.resolve(); await proceed.promise; yield* chunks(characterOutput()); },
+    apply: async (payload, context, journal) => {
+      if (!raced) { raced = true; await journal.ingest([{ id: 'character-apply-race', kind: 'tokens', at: Date.now(), sessionId: 'fixture', turnKey: 'fixture', amount: 20 }]); }
+      const { kind, ...input } = payload; return journal.configureCharacters(input, context);
+    },
+  });
+  await f.c.start(characterRequest('character-progress'));
+  await entered.promise;
+  await f.journal.ingest([
+    { id: 'character-background', kind: 'tokens', at: Date.now(), sessionId: 'fixture', turnKey: 'fixture', amount: 10 },
+    { id: 'character-background-read', kind: 'file_read', at: Date.now(), sessionId: 'fixture', turnKey: 'fixture', key: 'opaque-file' },
+  ]);
+  await f.journal.draw({ requestId: 'draw-during-character-generation', theme: 'xianxia' });
+  await f.journal.equip({ slot: 'charm', id: 'star' });
+  await f.journal.preferences({ notifications: 'off' });
+  proceed.resolve();
+  const job = await waitFor(f.c);
+  assert.equal(job.status, 'succeeded'); assert.equal(job.createdCharacterIds.length, 1);
+  assert.equal(f.calls.length, 1); assert.equal(f.applies.length, 2);
+  assert.equal(f.journal.snapshot().totals.tokens, 30);
+  assert.equal(f.journal.snapshot().equipment.charm, 'star');
+  assert.equal(f.journal.snapshot().collection.draws.length, 1);
+  assert.ok(f.journal.snapshot().collection.owned.length > 0);
+});
+
+test('a concurrent character definition change rejects stale generated definitions and preserves usage', async t => {
+  const entered = deferred(), proceed = deferred();
+  const f = await fixture(t, { stream: async function* () { entered.resolve(); await proceed.promise; yield* chunks(characterOutput()); } });
+  await f.c.start(characterRequest('stale-characters'));
+  await entered.promise;
+  await f.journal.configureCharacters({ requestId: 'other-character-author', characters: [character({ name: '另一位旅伴' })] }, { source: 'user' });
+  proceed.resolve();
+  const job = await waitFor(f.c);
+  assert.equal(job.status, 'failed'); assert.equal(job.code, 'GENERATION_REVISION_CONFLICT');
+  assert.deepEqual(job.createdCharacterIds, []); assert.equal(f.applies.length, 0);
+  assert.ok(f.journal.snapshot().collection.characters.some(item => item.name === '另一位旅伴'));
+  assert.ok(!f.journal.snapshot().collection.characters.some(item => item.name === '云归'));
+  assert.equal(job.totalTokens, 50); assert.equal(f.receipts.length, 1);
+});
+
+test('character cancellation and pending usage replay never apply or resend a paid request', async t => {
+  const entered = deferred(), proceed = deferred(); let unavailable = true;
+  const f = await fixture(t, {
+    stream: async function* () { yield { type: 'usage', usage }; entered.resolve(); await proceed.promise; yield* chunks(characterOutput()); },
+    recordUsage: () => { if (unavailable) throw new Error('fixture outbox unavailable'); },
+  });
+  const input = characterRequest('cancelled-character-call');
+  const started = await f.c.start(input); await entered.promise;
+  await f.c.cancel(started.job.id);
+  const job = await waitFor(f.c); proceed.resolve();
+  assert.equal(job.kind, 'characters'); assert.equal(job.status, 'cancelled');
+  assert.equal(job.totalTokens, 50); assert.equal(f.applies.length, 0);
+  unavailable = false; await f.reopen();
+  assert.equal((await f.c.start(input)).job.status, 'cancelled');
+  assert.equal(f.receipts.length, 2); assert.equal(f.receipts[0].id, f.receipts[1].id);
+  assert.equal(f.calls.length, 1); assert.deepEqual(f.c.get().job.createdCharacterIds, []);
+});
+
+test('legacy achievement receipts without kind retain identity and never trigger another paid call', async t => {
+  const f = await fixture(t);
+  const input = request('legacy-no-kind'); await f.c.start(input); const original = await waitFor(f.c);
+  await f.c.dispose();
+  const data = JSON.parse(await readFile(f.file, 'utf8'));
+  delete data.jobs[0].summary.kind; delete data.jobs[0].createdCharacterIds;
+  await writeFile(f.file, JSON.stringify(data)); await f.reopen();
+  const replay = await f.c.start({ ...input, kind: 'achievements' });
+  assert.equal(replay.job.id, original.id); assert.equal(replay.job.kind, 'achievements');
+  assert.deepEqual(replay.job.createdCharacterIds, []); assert.equal(f.calls.length, 1);
+});
+
+test('committed character uncertainty confirms only this request identities without including concurrent authors', async t => {
+  const f = await fixture(t, {
+    stream: () => chunks(characterOutput()),
+    apply: async (payload, context, journal) => {
+      const { kind, ...input } = payload; await journal.configureCharacters(input, context);
+      await journal.configureCharacters({ requestId: 'another-character-writer', characters: [character({ name: '旁观旅伴' })] }, { source: 'user' });
+      throw Object.assign(new Error('fixture committed character'), { code: 'DURABILITY_UNCERTAIN', committed: true });
+    },
+  });
+  const input = characterRequest('uncertain-characters'); await f.c.start(input);
+  const job = await waitFor(f.c);
+  assert.equal(job.status, 'succeeded'); assert.equal(job.code, 'DURABILITY_UNCERTAIN');
+  assert.match(job.message, /角色配置已提交/); assert.doesNotMatch(job.message, /未应用/);
+  assert.deepEqual(job.createdDefinitionIds, []); assert.equal(job.createdCharacterIds.length, 1);
+  assert.equal(f.journal.snapshot().collection.characters.find(item => item.id === job.createdCharacterIds[0]).name, '云归');
+  await f.reopen(); assert.equal((await f.c.start(input)).job.id, job.id); assert.equal(f.calls.length, 1);
+});
+
+async function fillCharacterSlots(f, count, prefix) {
+  const batchSize = f.dataCatalog.collection.limits.characterBatch;
+  for (let offset = 0; offset < count; offset += batchSize) {
+    const characters = Array.from({ length: Math.min(batchSize, count - offset) }, (_, index) => character({ name: `${prefix}伙伴${offset + index}` }));
+    await f.journal.configureCharacters({ requestId: `${prefix}-${offset}`, characters }, { source: 'user' });
+  }
+}
+
+test('a full custom or total character pool refuses generation before preparing or charging a model', async t => {
+  const f = await fixture(t);
+  await fillCharacterSlots(f, f.dataCatalog.collection.limits.customCharacters, 'full-pool');
+  const full = f.journal.snapshot();
+  await assert.rejects(f.c.start(characterRequest('full-pool-generation')), { code: 'GENERATION_CHARACTER_CAPACITY' });
+  assert.equal(f.prepares.length, 0); assert.equal(f.calls.length, 0); assert.equal(f.receipts.length, 0);
+  assert.equal(f.c.get().job, null); assert.deepEqual(f.journal.snapshot(), full);
+  await f.c.start(request('achievements-still-available'));
+  assert.equal((await waitFor(f.c)).status, 'succeeded', 'character capacity must not disable achievement generation');
+
+  const g = await fixture(t);
+  g.dataCatalog.collection.limits.characters = g.journal.snapshot().collection.characters.length;
+  await assert.rejects(g.c.start(characterRequest('total-pool-full')), { code: 'GENERATION_CHARACTER_CAPACITY' });
+  assert.equal(g.prepares.length, 0); assert.equal(g.calls.length, 0); assert.equal(g.c.get().job, null);
+});
+
+test('one remaining character slot bounds the prompt and rejects two outputs, then rechecks capacity before dispatch', async t => {
+  const f = await fixture(t, { stream: () => chunks(characterOutput([character(), character({ name: '月返' })])) });
+  await fillCharacterSlots(f, f.dataCatalog.collection.limits.customCharacters - 1, 'nearly-full');
+  const before = f.journal.snapshot();
+  await f.c.start(characterRequest('one-slot-two-output'));
+  const job = await waitFor(f.c);
+  assert.equal(job.status, 'failed'); assert.equal(job.code, 'GENERATION_OUTPUT');
+  assert.equal(f.applies.length, 0); assert.deepEqual(f.journal.snapshot(), before);
+  const supplied = JSON.parse(f.calls[0].messages[0].content[0].text);
+  assert.equal(supplied.allowed.maxCharacters, 1); assert.match(f.calls[0].system, /Design 1 to 1/);
+  assert.equal(f.receipts.length, 1);
+
+  const prepare = f.ctx.llm.prepareCall;
+  f.ctx.llm.prepareCall = async (...args) => {
+    const prepared = await prepare(...args);
+    await f.journal.configureCharacters({ requestId: 'last-slot-during-prepare', characters: [character({ name: '最后空位' })] }, { source: 'user' });
+    return prepared;
+  };
+  await f.c.start(characterRequest('filled-while-preparing'));
+  const blocked = await waitFor(f.c);
+  assert.equal(blocked.status, 'failed'); assert.equal(blocked.code, 'GENERATION_CHARACTER_CAPACITY');
+  assert.equal(blocked.attempted, false);
+  assert.equal(f.prepares.length, 2); assert.equal(f.calls.length, 1, 'a pool filled during preparation must not dispatch another model request');
+  assert.equal(f.applies.length, 0); assert.equal(f.receipts.length, 1);
 });

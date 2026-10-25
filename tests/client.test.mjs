@@ -6,13 +6,17 @@ import { readFile } from 'node:fs/promises';
 const source = await readFile(new URL('../src/client.js', import.meta.url), 'utf8');
 const clone = value => JSON.parse(JSON.stringify(value));
 const settle = () => new Promise(resolve => setImmediate(resolve));
+const PIXEL_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7E8AAAAASUVORK5CYII=';
+const PIXEL_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+function character(overrides = {}) { return { id: 'hero', name: '山海小狐', description: '带着莲灯的旅途同伴', theme: 'explorer', rarity: 'SR', icon: 'fox', animation: 'float', source: 'builtin', ...overrides }; }
 function journal(overrides = {}) {
   return {
     revision: 1, createdAt: 1792886400000, updatedAt: 1792886401000,
     preferences: { theme: 'explorer', notifications: 'all', reducedMotion: 'system' },
     totals: { tokens: 0, turns: 0, fileReads: 0, fileChanges: 0, formats: 0, skills: 0, delegations: 0 },
     level: { number: 1, current: 0, next: 100000, progress: 0 },
-    definitions: [], awards: [], timeline: [], notifications: [], equipment: { badges: [], charm: null },
+    definitions: [], awards: [], timeline: [], notifications: [], equipment: { badges: [], charm: null, character: null },
+    collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [], owned: [], draws: [] },
     ...overrides,
   };
 }
@@ -29,10 +33,12 @@ function harness(initial = journal(), options = {}) {
   const timers = new Map(), frames = new Map(), requests = [], records = [], effects = [], cleanupCallbacks = [];
   const documentEvents = new Map(), windowEvents = new Map(), copied = [];
   const sessionListeners = new Set();
+  const mediaListeners = new Set(), storage = options.storage ?? new Map(), drawReceipts = new Map();
   const server = { state: clone(initial), sessionKey: options.sessionKey, uiSessionGetterReads: 0, wide: true, job: options.job ? clone(options.job) : null, failGenerationStart: null, failGenerationGet: null,
+    drawWrites: 0, failDrawAfterCommit: false, systemReduce: false, canvasDraws: 0,
     failState: null, hangState: false, deferNextState: false, failPost: null, failCatalog: null,
     catalog: { metrics: [{ id: 'tokens' }, { id: 'file_read' }, { id: 'recipe' }], templates: ['count', 'model_report'], equipment: { charms: ['compass', 'star', 'leaf'] },
-      capabilities: options.capabilities,
+      capabilities: options.capabilities, collection: { drawCost: 1, drawSize: 10, iconIds: ['fox', 'robot', 'lotus', 'ship'], animationIds: ['none', 'float', 'pulse', 'orbit', 'spark'], limits: options.collectionLimits },
       generation: options.generation ?? { available: true, route: { provider: 'fixture', model: 'fixture-model' }, routeSource: 'default', maxDefinitions: 6 } } };
   const timer = (callback, delay = 0) => { const id = ++nextTimer; timers.set(id, { callback, due: now + delay }); return id; };
   const clear = id => timers.delete(id);
@@ -41,7 +47,7 @@ function harness(initial = journal(), options = {}) {
   const document = {
     hidden: false, activeElement: null, body: { style: { overflow: '' } },
     head: { children: [], appendChild(element) { this.children.push(element); element.isConnected = true; } },
-    createElement(tag) { return { tagName: tag, dataset: {}, textContent: '', remove() { this.isConnected = false; document.head.children = document.head.children.filter(item => item !== this); } }; },
+    createElement(tag) { return { tagName: tag, dataset: {}, textContent: '', getContext() { return { drawImage() { server.canvasDraws += 1; } }; }, toDataURL() { return PIXEL_PNG; }, remove() { this.isConnected = false; document.head.children = document.head.children.filter(item => item !== this); } }; },
     addEventListener: (name, fn) => add(documentEvents, name, fn),
     removeEventListener: (name, fn) => remove(documentEvents, name, fn),
   };
@@ -51,7 +57,11 @@ function harness(initial = journal(), options = {}) {
     removeEventListener: (name, fn) => remove(windowEvents, name, fn),
     crypto: { randomUUID: () => `fixture-${++nextId}` },
     navigator: { clipboard: { async writeText(text) { copied.push(text); } } },
-    matchMedia: () => ({ matches: false }),
+    atob: value => Buffer.from(value, 'base64').toString('binary'),
+    sessionStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
+    matchMedia: () => ({ get matches() { return server.systemReduce; }, addEventListener(_name, listener) { mediaListeners.add(listener); }, removeEventListener(_name, listener) { mediaListeners.delete(listener); } }),
+    FileReader: class { readyState = 0; readAsDataURL(file) { this.readyState = 1; queueMicrotask(() => { if (this.readyState !== 1) return; this.readyState = 2; this.result = file.dataURL; this.onload?.(); }); } abort() { this.readyState = 2; this.onabort?.(); } },
+    Image: class { naturalWidth = 1; naturalHeight = 1; set src(_value) { queueMicrotask(() => this.onload?.()); } },
   };
   const required = [];
   const React = {
@@ -97,21 +107,41 @@ function harness(initial = journal(), options = {}) {
       response = { job: clone(server.job) };
     } else if (path === '/generation' && options.method === 'POST') {
       if (server.failGenerationStart) return { ok: false, status: 503, json: async () => ({ error: server.failGenerationStart }) };
-      server.job = { id: `job-${++nextId}`, status: 'running', stage: 'analyzing', message: '正在分析所选数据', createdAt: 100, updatedAt: 100, createdDefinitionIds: [], usageSource: 'auxiliary_generation' };
+      server.job = { id: `job-${++nextId}`, kind: JSON.parse(options.body).kind || 'achievements', status: 'running', stage: 'analyzing', message: '正在分析所选数据', createdAt: 100, updatedAt: 100, createdDefinitionIds: [], createdCharacterIds: [], usageSource: 'auxiliary_generation' };
       response = { job: clone(server.job) };
     } else if (path === '/generation/cancel') {
       assert.notEqual(server.job?.stage, 'applying');
       server.job = { ...server.job, status: 'cancelled', stage: 'done', message: '已取消生成', updatedAt: server.job.updatedAt + 1 };
       response = { job: clone(server.job) };
+    } else if (path === '/draw') {
+      const body = JSON.parse(options.body);
+      if (!drawReceipts.has(body.requestId)) {
+        if (server.state.collection.points.balance < 1) return { ok: false, status: 409, json: async () => ({ error: '成就点不足' }) };
+        const item = server.state.collection.characters.find(item => item.theme === body.theme);
+        assert.ok(item, 'Draw fixture needs a character in the requested theme');
+        const existing = server.state.collection.owned.find(entry => entry.id === item.id);
+        const receipt = { requestId: 'stored:' + body.requestId, theme: body.theme, at: 200, cost: 1, results: Array.from({ length: 10 }, (_, index) => ({ id: item.id, rarity: item.rarity, isNew: !existing && index === 0 })) };
+        drawReceipts.set(body.requestId, receipt); server.state.collection.draws.push(receipt);
+        if (existing) existing.count += 10; else server.state.collection.owned.push({ id: item.id, count: 10, firstAt: 200 });
+        server.state.collection.points.spent += 1; server.state.collection.points.balance -= 1; server.state.revision += 1; server.drawWrites += 1;
+        if (server.failDrawAfterCommit) { server.failDrawAfterCommit = false; throw new Error('connection lost after commit'); }
+      }
+      response = { ...clone(server.state), draw: clone(drawReceipts.get(body.requestId)) };
     } else if (options.method === 'POST') {
       if (server.failPost) return { ok: false, status: 409, json: async () => ({ error: server.failPost }) };
       const body = JSON.parse(options.body);
       if (path === '/preferences') server.state.preferences = { ...server.state.preferences, ...body };
       if (path === '/equip') {
-        if (body.slot === 'charm') server.state.equipment.charm = body.equipped === false ? null : body.id;
+        if (body.slot === 'character') server.state.equipment.character = body.equipped === false ? null : body.id;
+        else if (body.slot === 'charm') server.state.equipment.charm = body.equipped === false ? null : body.id;
         else server.state.equipment.badges = body.equipped === false ? [] : [body.id];
       }
       if (path === '/configure') server.state.definitions = server.state.definitions.map(item => body.archiveIds?.includes(item.id) ? { ...item, status: 'archived' } : item);
+      if (path === '/characters') for (const declared of body.characters) {
+        const previous = server.state.collection.characters.find(item => item.id === declared.id);
+        if (previous) Object.assign(previous, declared);
+        else server.state.collection.characters.push({ ...declared, id: `user-${++nextId}`, source: 'user' });
+      }
       server.state.revision += 1;
       response = clone(server.state);
     } else throw new Error(`Unexpected request ${url}`);
@@ -185,7 +215,8 @@ function harness(initial = journal(), options = {}) {
   }
   function dispatch(map, name, event = {}) { [...(map.get(name) ?? [])].forEach(fn => fn(event)); }
   function click(label) {
-    const button = nodes().find(node => node.type === 'button' && (node.props['aria-label'] === label || textContent(node).trim() === label));
+    const matches = nodes().filter(node => node.type === 'button' && (node.props['aria-label'] === label || textContent(node).trim() === label));
+    const button = matches.find(node => !node.props.disabled) || matches[0];
     assert.ok(button, `Missing button: ${label}`); assert.equal(Boolean(button.props.disabled), false, `${label} disabled`); button.props.onClick(); render();
   }
   function change(id, value) {
@@ -194,12 +225,13 @@ function harness(initial = journal(), options = {}) {
   }
   plugin.apply(context); render();
   return {
-    plugin, required, records, requests, server, document, window, timers, documentEvents, windowEvents, copied,
+    plugin, required, records, requests, server, document, window, timers, documentEvents, windowEvents, copied, storage,
     state: () => getStore(), render, nodes, textContent, advance, click, change,
     async ready() { await settle(); render(); },
     visibility(hidden) { document.hidden = hidden; dispatch(documentEvents, 'visibilitychange'); },
     online() { dispatch(windowEvents, 'online'); },
     session(key) { server.sessionKey = key; sessionListeners.forEach(listener => listener()); },
+    systemMotion(value) { server.systemReduce = value; mediaListeners.forEach(listener => listener()); render(); },
     key(key) { const event = { key, preventDefault() {}, stopPropagation() {} }; dispatch(documentEvents, 'keydown', event); render(); },
     cleanup() { cleanupCallbacks.splice(0).forEach(callback => callback?.()); frames.forEach(stopFrame); frames.clear(); },
     remount() { plugin.apply(context); render(); },
@@ -392,6 +424,99 @@ test('footer decoration is a small native strip and collapses to one icon', asyn
   app.server.wide = false; strip = app.nodes().find(node => node.type === 'button' && node.props.className?.includes('daj-profile-strip'));
   assert.match(strip.props.className, /daj-profile-narrow/); assert.equal(app.textContent(strip).trim(), '');
   strip.props.onClick(); app.render(); assert.equal(app.state().open, true);
+});
+
+test('ten themes and frame height previews stay local until saving and preserve earned records', async t => {
+  const award = { id: 'award-1', definitionId: 'first-read', at: 3, title: '第一眼', source: 'automatic' };
+  const app = harness(journal({ awards: [award] })); t.after(() => app.cleanup()); await app.ready();
+  const themeField = app.nodes().find(node => node.props?.id === 'daj-settings-theme');
+  assert.equal(app.nodes(themeField).filter(node => node.type === 'option').length, 10);
+  const writes = app.requests.filter(item => item.options.method === 'POST').length;
+  app.click('展示 104px'); app.change('daj-settings-frame-height', '145');
+  assert.equal(app.requests.filter(item => item.options.method === 'POST').length, writes);
+  assert.ok(app.nodes().some(node => node.props?.className?.includes('daj-account-frame') && node.props.style?.height === '145px'));
+  app.click('保存展示框'); await app.ready();
+  assert.equal(app.state().data.preferences.frameStyle, 'showcase'); assert.equal(app.state().data.preferences.frameHeight, 145);
+  assert.equal(app.nodes().find(node => node.type === 'button' && node.props.className?.includes('daj-profile-strip')).props.style.height, '145px');
+  for (const selected of ['wuxia', 'fantasy', 'space', 'ocean', 'garden', 'academy', 'steampunk']) {
+    app.change('daj-settings-theme', selected); await app.ready(); assert.equal(app.state().data.preferences.theme, selected);
+    assert.equal(app.state().data.awards.length, 1);
+  }
+});
+
+test('zero point draw stays disabled and a committed network failure retries the exact request across remount', async t => {
+  const app = harness(journal({ collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [character()], owned: [], draws: [] } }));
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏');
+  const drawButton = () => app.nodes().find(node => node.type === 'button' && app.textContent(node).trim() === '1 成就点 · 十连抽取');
+  assert.equal(drawButton().props.disabled, true); assert.match(app.textContent(), /解锁一项成就/);
+  app.server.state.collection.points = { earned: 1, spent: 0, balance: 1 }; app.server.state.revision = 2;
+  await app.advance(1800); assert.equal(drawButton().props.disabled, false);
+  app.server.failDrawAfterCommit = true; app.click('1 成就点 · 十连抽取'); await app.ready();
+  assert.equal(app.server.drawWrites, 1); assert.ok(app.storage.has('dsh-achievement-journal.draw'));
+  app.cleanup(); await settle(); app.remount(); await app.ready(); app.click('打开成就中心'); app.click('角色收藏');
+  assert.equal(app.state().data.collection.points.balance, 0); app.click('重试这次十连'); await app.ready();
+  const draws = app.requests.filter(item => item.url.endsWith('/draw'));
+  assert.equal(draws.length, 2); assert.equal(JSON.parse(draws[0].options.body).requestId, JSON.parse(draws[1].options.body).requestId);
+  assert.equal(app.server.drawWrites, 1); assert.equal(app.state().data.collection.points.spent, 1);
+  assert.equal(app.state().drawReceipt.results.length, 10); assert.match(app.textContent(), /已收藏 10 份/);
+  app.click('佩戴角色 山海小狐'); await app.ready(); assert.equal(app.state().data.equipment.character, 'hero');
+  assert.ok(app.nodes().some(node => node.props?.['data-animation'] === 'float'));
+  assert.equal(app.storage.has('dsh-achievement-journal.draw'), false);
+  const before = app.requests.filter(item => item.options.method === 'POST').length;
+  app.cleanup(); await settle(); app.remount(); await app.ready();
+  assert.equal(app.requests.filter(item => item.options.method === 'POST').length, before);
+});
+
+test('custom art validates MIME and header, joins the pool, and an owned custom appearance remains editable', async t => {
+  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏'); app.click('创作角色');
+  app.change('daj-character-name', '抱莲小狐'); app.change('daj-character-theme', 'garden'); app.change('daj-character-icon', 'lotus'); app.change('daj-character-animation', 'orbit');
+  const upload = file => app.nodes().find(node => node.props?.id === 'daj-character-art').props.onChange({ target: { files: [file] } });
+  upload({ type: 'image/svg+xml', size: 12, dataURL: 'data:image/svg+xml;base64,PHN2Zz4=' }); app.render(); assert.match(app.textContent(), /PNG、JPEG、GIF/);
+  upload({ type: 'image/png', size: 30, dataURL: PIXEL_GIF.replace('image/gif', 'image/png') }); await app.ready(); assert.match(app.textContent(), /内容与格式不匹配/);
+  upload({ type: 'image/gif', size: 42, dataURL: PIXEL_GIF }); await app.ready(); app.click('保存角色到卡池'); await app.ready();
+  const created = app.state().data.collection.characters.find(item => item.name === '抱莲小狐');
+  assert.ok(created); assert.equal(created.art, PIXEL_GIF); assert.equal(created.theme, 'garden'); assert.equal(app.state().data.collection.owned.length, 0);
+  app.click('返回角色收藏'); app.click('全部卡池'); assert.match(app.textContent(), /尚未获得 · 已在卡池/);
+  app.server.state.collection.owned.push({ id: created.id, count: 2, firstAt: 20 }); app.server.state.revision += 1;
+  await app.advance(1800); app.click('编辑角色 抱莲小狐');
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-character-theme').props.disabled, true);
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-character-rarity').props.disabled, true);
+  app.change('daj-character-name', '莲灯小狐'); app.change('daj-character-animation', 'pulse'); app.click('保存角色外观'); await app.ready();
+  assert.equal(app.state().data.collection.characters.find(item => item.id === created.id).name, '莲灯小狐');
+  assert.equal(app.state().data.collection.owned.find(item => item.id === created.id).count, 2);
+  app.change('daj-settings-motion', 'reduce'); await app.ready();
+  assert.ok(app.server.canvasDraws > 0);
+  assert.ok(app.nodes().filter(node => node.type === 'img').every(node => node.props.src.startsWith('data:image/png;')));
+  assert.equal(app.state().data.collection.characters.find(item => item.id === created.id).art, PIXEL_GIF);
+  app.change('daj-settings-motion', 'system'); await app.ready(); app.systemMotion(true); await app.ready();
+  assert.ok(app.nodes().filter(node => node.type === 'img').every(node => node.props.src.startsWith('data:image/png;')));
+});
+
+test('model character generation omits achievement metrics and saves into the pool without granting ownership or points', async t => {
+  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏'); app.click('创作角色');
+  app.change('daj-character-generation-theme', 'xianxia'); app.change('daj-character-generation-direction', '莲灯灵狐'); app.click('模型生成角色'); await app.ready();
+  const submitted = JSON.parse(app.requests.find(item => item.url.endsWith('/generation') && item.options.method === 'POST').options.body);
+  assert.equal(submitted.kind, 'characters'); assert.equal(submitted.theme, 'xianxia'); assert.equal('metrics' in submitted, false);
+  app.server.state.collection.characters.push(character({ id: 'model-fox', name: '莲灯灵狐', theme: 'xianxia', source: 'model' })); app.server.state.revision += 1;
+  app.server.job = { ...app.server.job, status: 'succeeded', stage: 'done', updatedAt: 200, createdCharacterIds: ['model-fox'], message: '角色已加入卡池' };
+  await app.advance(1200); app.render(); assert.match(app.textContent(), /已生成并加入卡池 1 位角色/);
+  assert.equal(app.state().data.collection.owned.length, 0); assert.equal(app.state().data.collection.points.balance, 0);
+  app.click('查看新角色'); assert.match(app.textContent(), /莲灯灵狐/); assert.match(app.textContent(), /尚未获得 · 已在卡池/);
+});
+
+test('full custom pool blocks model and manual creation while keeping existing custom editing available', async t => {
+  const custom = character({ id: 'custom', name: '已有同伴', source: 'user' });
+  const app = harness(journal({ collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [character(), custom], owned: [], draws: [] } }), { collectionLimits: { customCharacters: 1 } });
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏'); app.click('创作角色');
+  assert.match(app.textContent(), /自定义卡池已满/);
+  const modelButton = app.nodes().find(node => node.type === 'button' && app.textContent(node).trim() === '模型生成角色');
+  assert.equal(modelButton.props.disabled, true); modelButton.props.onClick();
+  const newButton = app.nodes().find(node => node.type === 'button' && app.textContent(node).trim() === '保存角色到卡池');
+  assert.equal(newButton.props.disabled, true); newButton.props.onClick(); await app.ready();
+  assert.equal(app.requests.filter(item => item.options.method === 'POST').length, 0);
+  app.click('返回角色收藏'); app.click('全部卡池'); app.click('编辑角色 已有同伴');
+  app.change('daj-character-name', '改名后的同伴'); app.click('保存角色外观'); await app.ready();
+  assert.equal(app.state().data.collection.characters.find(item => item.id === 'custom').name, '改名后的同伴');
 });
 
 test('feedback preferences take effect immediately and preview never writes real achievements', async t => {

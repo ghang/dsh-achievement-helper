@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0-rc.1
+
+Add configurable profile frame heights with live previews, ten complete themes,
+and themed character collections. One earned achievement funds one ten-pull;
+draws commit point spending, duplicates and guaranteed rarity atomically.
+Add model-generated and custom character pool entries, local animated images,
+reduced-motion presentation and character equipment. Migrate v1 archives while
+retaining earned records, deduplication identities and existing equipment.
+Four tools remain, with expanded character and theme parameters.
+
 ## 0.1.0-rc.3
 
 Compact responsive layouts and smaller badges/icons. Replace prompt-copy setup
