@@ -17,6 +17,20 @@ function bus() {
 }
 const usage = (input = 10, output = 5) => ({ inputTokens: input, outputTokens: output, cacheReadTokens: 10, cacheWriteTokens: 0, totalTokens: input + output + 10, reasoningTokens: 2 });
 
+test('optional providers use the public get seam when scoped property access requires inject', async () => {
+  const events = bus(); let forbiddenReads = 0;
+  const providers = { tools: {}, subagents: {}, workingDirectory: { get: () => '/private/optional-workspace' } };
+  const ctx = new Proxy({ on: events.on, get: name => providers[name] }, {
+    get(target, key) { if (Object.hasOwn(providers, key)) { forbiddenReads++; throw new Error('cannot get property without inject'); } return target[key]; },
+  });
+  const collector = createCollector({ ctx, ingest: async () => {} });
+  await collector.start();
+  assert.equal(collector.capabilities().sources.find(s => s.kind === 'skill_loaded').connected, true);
+  assert.equal(collector.capabilities().sources.find(s => s.kind === 'delegate_completed').connected, true);
+  assert.ok(collector.contextFor({ id: 'optional-session', header: {} }).workspaceKey);
+  assert.equal(forbiddenReads, 0); await collector.dispose();
+});
+
 async function fixture(options = {}) {
   let now = 1_800_000_000_000;
   const ctx = Object.assign(bus(), {

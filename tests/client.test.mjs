@@ -23,13 +23,17 @@ function definition(overrides = {}) {
 
 // A small React/slots simulator keeps this client contract test independent of
 // installed runtimes. The actual host/browser is verified separately.
-function harness(initial = journal()) {
+function harness(initial = journal(), options = {}) {
   let now = 0, nextTimer = 0, nextId = 0, registration, getStore, dirty = false;
   let frame, hookIndex, renderedFrames;
   const timers = new Map(), frames = new Map(), requests = [], records = [], effects = [], cleanupCallbacks = [];
   const documentEvents = new Map(), windowEvents = new Map(), copied = [];
-  const server = { state: clone(initial), failState: null, hangState: false, deferNextState: false, failPost: null, failCatalog: null,
-    catalog: { metrics: [{ id: 'tokens' }], templates: ['count', 'model_report'], equipment: { charms: ['compass', 'star', 'leaf'] } } };
+  const sessionListeners = new Set();
+  const server = { state: clone(initial), sessionKey: options.sessionKey, uiSessionGetterReads: 0, wide: true, job: options.job ? clone(options.job) : null, failGenerationStart: null, failGenerationGet: null,
+    failState: null, hangState: false, deferNextState: false, failPost: null, failCatalog: null,
+    catalog: { metrics: [{ id: 'tokens' }, { id: 'file_read' }, { id: 'recipe' }], templates: ['count', 'model_report'], equipment: { charms: ['compass', 'star', 'leaf'] },
+      capabilities: options.capabilities,
+      generation: options.generation ?? { available: true, route: { provider: 'fixture', model: 'fixture-model' }, routeSource: 'default', maxDefinitions: 6 } } };
   const timer = (callback, delay = 0) => { const id = ++nextTimer; timers.set(id, { callback, due: now + delay }); return id; };
   const clear = id => timers.delete(id);
   const add = (map, name, fn) => { if (!map.has(name)) map.set(name, new Set()); map.get(name).add(fn); };
@@ -75,7 +79,7 @@ function harness(initial = journal()) {
   };
   async function fetch(url, options) {
     requests.push({ url, options });
-    const path = url.slice('/dsh-achievement-journal/api'.length);
+    const path = url.slice('/dsh-achievement-journal/api'.length).split('?')[0];
     let response;
     if (path === '/state') {
       if (server.hangState) return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }));
@@ -88,6 +92,17 @@ function harness(initial = journal()) {
     } else if (path === '/catalog') {
       if (server.failCatalog) return { ok: false, status: 503, json: async () => ({ error: server.failCatalog }) };
       response = clone(server.catalog);
+    } else if (path === '/generation' && options.method !== 'POST') {
+      if (server.failGenerationGet) return { ok: false, status: 503, json: async () => ({ error: server.failGenerationGet }) };
+      response = { job: clone(server.job) };
+    } else if (path === '/generation' && options.method === 'POST') {
+      if (server.failGenerationStart) return { ok: false, status: 503, json: async () => ({ error: server.failGenerationStart }) };
+      server.job = { id: `job-${++nextId}`, status: 'running', stage: 'analyzing', message: '正在分析所选数据', createdAt: 100, updatedAt: 100, createdDefinitionIds: [], usageSource: 'auxiliary_generation' };
+      response = { job: clone(server.job) };
+    } else if (path === '/generation/cancel') {
+      assert.notEqual(server.job?.stage, 'applying');
+      server.job = { ...server.job, status: 'cancelled', stage: 'done', message: '已取消生成', updatedAt: server.job.updatedAt + 1 };
+      response = { job: clone(server.job) };
     } else if (options.method === 'POST') {
       if (server.failPost) return { ok: false, status: 409, json: async () => ({ error: server.failPost }) };
       const body = JSON.parse(options.body);
@@ -110,13 +125,19 @@ function harness(initial = journal()) {
     if (name === 'react-dom') return { createPortal: children => ({ type: 'fixture-portal', props: { children } }) };
     throw new Error(`Unexpected dependency ${name}`);
   });
+  const uiSession = { adapter: { current: { getSnapshot: () => ({ key: server.sessionKey }), subscribe(listener) { sessionListeners.add(listener); return () => sessionListeners.delete(listener); } } } };
   const context = {
+    uiSession,
     slots: {
       inject(_name, callback) { return callback(); },
       register(meta, component) { const record = { meta, component, active: true }; records.push(record); return () => { record.active = false; }; },
     },
     effect(callback) { cleanupCallbacks.push(callback()); },
   };
+  if (options.strictServices) {
+    context.get = name => name === 'uiSession' ? uiSession : undefined;
+    Object.defineProperty(context, 'uiSession', { get() { server.uiSessionGetterReads += 1; throw new Error('uiSession was not declared in inject'); } });
+  }
   function stopFrame(target) { target.hooks.forEach(hook => hook?.cleanup?.()); }
   function renderNode(node, path) {
     if (node == null || typeof node === 'boolean') return null;
@@ -135,7 +156,7 @@ function harness(initial = journal()) {
     let result;
     for (let attempt = 0; attempt < 8; attempt += 1) {
       dirty = false; renderedFrames = new Set();
-      result = records.filter(record => record.active).map((record, i) => renderNode({ type: record.component, props: {} }, `slot${i}`));
+      result = records.filter(record => record.active).map((record, i) => renderNode({ type: record.component, props: { wide: server.wide } }, `slot${i}`));
       for (const [key, value] of frames) if (!renderedFrames.has(key)) { stopFrame(value); frames.delete(key); }
       while (effects.length) effects.shift()();
       if (!dirty) return result;
@@ -178,6 +199,7 @@ function harness(initial = journal()) {
     async ready() { await settle(); render(); },
     visibility(hidden) { document.hidden = hidden; dispatch(documentEvents, 'visibilitychange'); },
     online() { dispatch(windowEvents, 'online'); },
+    session(key) { server.sessionKey = key; sessionListeners.forEach(listener => listener()); },
     key(key) { const event = { key, preventDefault() {}, stopPropagation() {} }; dispatch(documentEvents, 'keydown', event); render(); },
     cleanup() { cleanupCallbacks.splice(0).forEach(callback => callback?.()); frames.forEach(stopFrame); frames.clear(); },
     remount() { plugin.apply(context); render(); },
@@ -262,7 +284,7 @@ test('reconnect during an older in-flight request establishes a fresh server wat
   assert.equal(app.state().toast.leader.id, 'after-reconnect'); assert.equal(app.state().toast.items.length, 1);
 });
 
-test('preferences and equipment save through the API; model examples only copy instructions', async t => {
+test('preferences and equipment save through the API and failures preserve the saved state', async t => {
   const app = harness(); t.after(() => app.cleanup()); await app.ready();
   app.change('daj-settings-theme', 'xianxia'); await app.ready();
   assert.equal(app.state().data.preferences.theme, 'xianxia');
@@ -270,15 +292,106 @@ test('preferences and equipment save through the API; model examples only copy i
   assert.equal(app.state().data.equipment.charm, 'leaf');
   const equipRequest = app.requests.find(item => item.url.endsWith('/equip'));
   assert.deepEqual(JSON.parse(equipRequest.options.body), { id: 'leaf', slot: 'charm', equipped: true });
-  app.click('打开成就中心'); app.click('历练配置'); app.click('积累目标');
-  const writesBefore = app.requests.filter(item => item.options.method === 'POST').length;
-  app.click('复制给模型'); await app.ready();
-  assert.equal(app.requests.filter(item => item.options.method === 'POST').length, writesBefore);
-  assert.equal(app.copied.length, 1); assert.match(app.copied[0], /先读取插件的能力目录/); assert.match(app.copied[0], /不要把建议当作已配置/);
-  assert.equal(app.state().data.definitions.length, 0);
   app.server.failPost = '请先取下一枚勋章';
   app.change('daj-settings-charm', 'star'); await app.ready();
   assert.equal(app.state().data.equipment.charm, 'leaf'); assert.match(app.textContent(), /请先取下一枚勋章/);
+});
+
+test('one-click generation submits selected real sources and applies only the successful job result', async t => {
+  const app = harness(journal(), { sessionKey: 'session:fixture' }); t.after(() => app.cleanup()); await app.ready();
+  assert.ok(app.requests.some(item => item.url.endsWith('/catalog?sessionId=session%3Afixture')));
+  app.click('打开成就中心'); app.click('模型配置');
+  assert.doesNotMatch(app.textContent(), /复制给模型|粘贴发送/);
+  assert.ok(!app.nodes().some(node => node.props?.id === 'daj-metric-recipe'));
+  app.change('daj-metric-tokens', false);
+  app.change('daj-generation-theme', 'cyber'); app.change('daj-generation-direction', '城市夜航');
+  app.nodes().find(node => node.type === 'input' && node.props.type === 'radio' && node.props.value === 'discovery').props.onChange(); app.render();
+  app.click('分析并生成成就'); await app.ready();
+  const submitted = JSON.parse(app.requests.find(item => item.url.endsWith('/generation') && item.options.method === 'POST').options.body);
+  assert.deepEqual(submitted.metrics, ['file_read']); assert.equal(submitted.theme, 'cyber'); assert.equal(submitted.style, 'discovery');
+  assert.equal(submitted.direction, '城市夜航'); assert.equal(submitted.sessionId, 'session:fixture'); assert.ok(submitted.requestId);
+  assert.equal(app.copied.length, 0); assert.equal(app.state().data.definitions.length, 0);
+  assert.equal(app.state().generationJob.stage, 'analyzing'); assert.match(app.textContent(), /分析使用记录/);
+  app.server.job = { ...app.server.job, stage: 'generating', updatedAt: 101, message: '模型正在生成规则' };
+  await app.advance(1200); assert.match(app.textContent(), /生成成就规则/);
+  app.server.job = { ...app.server.job, stage: 'applying', updatedAt: 102, message: '正在校验并保存' };
+  await app.advance(1200);
+  assert.equal(app.nodes().find(node => node.type === 'button' && app.textContent(node).trim() === '正在应用').props.disabled, true);
+  app.server.state.revision = 2;
+  app.server.state.definitions.push(definition({ id: 'generated', source: 'model', title: '夜航第一眼' }));
+  app.server.job = { ...app.server.job, status: 'succeeded', stage: 'done', updatedAt: 103, message: '已保存新的成就', createdDefinitionIds: ['generated'], totalTokens: 230 };
+  await app.advance(1200); app.render();
+  assert.match(app.textContent(), /已生成并应用 1 项成就/); assert.match(app.textContent(), /夜航第一眼/); assert.match(app.textContent(), /230 token/);
+  assert.equal(app.state().data.definitions.length, 1);
+  app.click('查看新成就'); assert.equal(app.state().tab, 'collection'); assert.match(app.textContent(), /夜航第一眼/);
+});
+
+test('generation unavailable, failed and cancelled states do not invent saved achievements', async t => {
+  const app = harness(journal(), { generation: { available: false, reason: '请先配置默认模型' } }); t.after(() => app.cleanup());
+  await app.ready(); app.click('打开成就中心'); app.click('模型配置');
+  assert.match(app.textContent(), /请先配置默认模型/);
+  assert.equal(app.nodes().find(node => node.type === 'button' && app.textContent(node).trim() === '分析并生成成就').props.disabled, true);
+  assert.equal(app.requests.filter(item => item.url.endsWith('/generation') && item.options.method === 'POST').length, 0);
+  app.server.catalog.generation.available = true; app.click('重新检查'); await app.ready();
+  app.server.failGenerationStart = '模型暂时不可用'; app.click('分析并生成成就'); await app.ready();
+  assert.match(app.textContent(), /模型暂时不可用/); assert.equal(app.state().data.definitions.length, 0);
+  app.server.failGenerationStart = null; app.click('分析并生成成就'); await app.ready(); app.click('取消生成'); await app.ready();
+  assert.equal(app.state().generationJob.status, 'cancelled'); assert.match(app.textContent(), /已取消本次生成/);
+  app.click('分析并生成成就'); await app.ready();
+  app.server.job = { ...app.server.job, status: 'failed', stage: 'done', updatedAt: 200, message: '生成规则未通过校验', createdDefinitionIds: [] };
+  await app.advance(1200); assert.match(app.textContent(), /本次生成未完成/); assert.match(app.textContent(), /未通过校验/);
+  assert.equal(app.state().data.definitions.length, 0); assert.doesNotMatch(app.textContent(), /已生成并应用/);
+});
+
+test('source connectivity filters defaults, select-all and generation after active scope changes', async t => {
+  const app = harness(journal(), { capabilities: { sources: [{ kind: 'tokens', connected: true }, { kind: 'file_read', connected: false }] } });
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('模型配置');
+  const field = id => app.nodes().find(node => node.props?.id === 'daj-metric-' + id);
+  assert.equal(field('tokens').props.checked, true);
+  assert.equal(field('file_read').props.checked, false); assert.equal(field('file_read').props.disabled, true);
+  assert.match(app.textContent(), /当前环境不可用/);
+  app.click('全选'); assert.equal(field('file_read').props.checked, false);
+  app.server.catalog.capabilities.sources = [{ kind: 'tokens', connected: false }, { kind: 'file_read', connected: true }];
+  app.session('scope:changed'); await app.ready();
+  assert.equal(field('tokens').props.checked, false); assert.equal(field('tokens').props.disabled, true);
+  assert.equal(field('file_read').props.disabled, false);
+  app.click('全选'); assert.equal(field('file_read').props.checked, true);
+  app.click('分析并生成成就'); await app.ready();
+  const submitted = JSON.parse(app.requests.find(item => item.url.endsWith('/generation') && item.options.method === 'POST').options.body);
+  assert.deepEqual(submitted.metrics, ['file_read']);
+});
+
+test('optional Cordis session service uses get without touching a guarded property getter', async t => {
+  const app = harness(journal(), { strictServices: true, sessionKey: 'session:first' }); t.after(() => app.cleanup()); await app.ready();
+  assert.ok(app.requests.some(item => item.url.endsWith('/catalog?sessionId=session%3Afirst')));
+  app.session('session:second'); await app.ready();
+  assert.ok(app.requests.some(item => item.url.endsWith('/catalog?sessionId=session%3Asecond')));
+  app.click('打开成就中心'); app.click('模型配置'); app.click('分析并生成成就'); await app.ready();
+  const submitted = JSON.parse(app.requests.find(item => item.url.endsWith('/generation') && item.options.method === 'POST').options.body);
+  assert.equal(submitted.sessionId, 'session:second'); assert.equal(app.server.uiSessionGetterReads, 0);
+});
+
+test('running generation restores independently of the open page and default routing omits a non-string session key', async t => {
+  const restored = { id: 'restored-job', status: 'running', stage: 'generating', message: '仍在生成中', createdAt: 1, updatedAt: 2, createdDefinitionIds: [] };
+  const app = harness(journal(), { job: restored, strictServices: true, sessionKey: { private: 'not-a-session-id' } }); t.after(() => app.cleanup()); await app.ready();
+  assert.ok(app.requests.some(item => item.url.endsWith('/generation'))); assert.ok(!app.requests.some(item => item.url.includes('sessionId=')));
+  app.click('打开成就中心'); app.click('模型配置'); assert.match(app.textContent(), /仍在生成中/);
+  app.key('Escape'); app.server.job = { ...app.server.job, status: 'cancelled', stage: 'done', updatedAt: 3 };
+  await app.advance(1200); assert.equal(app.state().generationJob.status, 'cancelled');
+  app.click('打开成就中心'); app.click('模型配置'); app.click('分析并生成成就'); await app.ready();
+  const submitted = JSON.parse(app.requests.find(item => item.url.endsWith('/generation') && item.options.method === 'POST').options.body);
+  assert.equal('sessionId' in submitted, false);
+});
+
+test('footer decoration is a small native strip and collapses to one icon', async t => {
+  const earned = definition({ unlockedAt: 3 });
+  const app = harness(journal({ definitions: [earned], equipment: { badges: ['first-read'], charm: 'leaf' } })); t.after(() => app.cleanup()); await app.ready();
+  assert.equal(app.records.find(record => record.meta.name === 'sidebar.footer.action').meta.order, 9990);
+  let strip = app.nodes().find(node => node.type === 'button' && node.props.className?.includes('daj-profile-strip'));
+  assert.match(app.textContent(strip), /Lv\.1/); assert.ok(app.nodes(strip).some(node => node.props?.className === 'daj-profile-badges'));
+  app.server.wide = false; strip = app.nodes().find(node => node.type === 'button' && node.props.className?.includes('daj-profile-strip'));
+  assert.match(strip.props.className, /daj-profile-narrow/); assert.equal(app.textContent(strip).trim(), '');
+  strip.props.onClick(); app.render(); assert.equal(app.state().open, true);
 });
 
 test('feedback preferences take effect immediately and preview never writes real achievements', async t => {

@@ -170,7 +170,7 @@ function normalizeEvidence(input) {
   if (input === undefined) return undefined;
   fields(input, ['source', 'eventSeq', 'callKey', 'step', 'usage', 'evidenceKeys'], 'evidence');
   const evidence = {};
-  if (input.source !== undefined) evidence.source = option(input.source, ['session/event', 'tools/result', 'subagent/end'], 'evidence.source');
+  if (input.source !== undefined) evidence.source = option(input.source, ['session/event', 'tools/result', 'subagent/end', 'auxiliary_generation'], 'evidence.source');
   for (const key of ['eventSeq', 'step']) if (input[key] !== undefined) evidence[key] = integer(input[key], key);
   if (input.callKey !== undefined) evidence.callKey = opaque(input.callKey, 'evidence.callKey');
   if (input.evidenceKeys !== undefined) { if (!Array.isArray(input.evidenceKeys) || input.evidenceKeys.length > 32) fail('INVALID_INPUT', 'evidenceKeys must be a bounded list.'); evidence.evidenceKeys = input.evidenceKeys.map(key => opaque(key, 'evidence key')); }

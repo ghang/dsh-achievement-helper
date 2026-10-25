@@ -7,9 +7,10 @@ import { resolveDshHome } from '@deepseek-ai/dsh-home-paths';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { createJournal } from './journal.mjs';
 import { createCollector } from './collector.mjs';
+import { createGenerationController } from './generation.mjs';
 
 export const name = 'achievement-journal';
-export const inject = ['tools', 'sessions', 'webServer', 'connection'];
+export const inject = ['tools', 'sessions', 'webServer', 'connection', 'llm'];
 export const Config = z.object({
   statePath: z.string().default('').description('成就档案文件；留空使用当前 DSH_HOME 下的独立存储。'),
 });
@@ -18,6 +19,10 @@ const METRICS = ['tokens', 'turn_completed', 'file_read', 'file_changed', 'forma
   'delegate_completed', 'file_presented', 'route_used', 'recall_used', 'recipe', 'model_report'];
 const TEMPLATES = ['count', 'distinct', 'first_seen', 'recipe', 'model_report'];
 const RECIPES = ['read_then_change', 'skill_then_change', 'delegate_then_present', 'recall_then_change', 'search_read_change'];
+function optionalService(ctx, name) {
+  try { const service = ctx.get?.(name); if (service !== undefined) return service; } catch { /* optional provider */ }
+  try { return ctx[name]; } catch { return undefined; }
+}
 const error = (message, status = 400, code = 'JOURNAL_INVALID') => Object.assign(new Error(message), { status, code });
 const json = (res, status, value) => {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
@@ -136,7 +141,7 @@ export async function createAchievementJournal(ctx, config = {}) {
   // The fallback is ephemeral and never records facts; a damaged salt is not
   // reset and cannot silently re-key a previously earned collection.
   hashKey ??= value => createHmac('sha256', 'unavailable-ephemeral').update(String(value)).digest('hex');
-  const disposers = []; let disposed = false; let closing = false; let ingestFailures = 0;
+  const disposers = []; let disposed = false; let closing = false; let ingestFailures = 0; let generation;
   let notifications = [];
   const now = config.now ?? Date.now;
   function remember(snapshot) {
@@ -155,7 +160,7 @@ export async function createAchievementJournal(ctx, config = {}) {
   function capabilities(agent) {
     const data = collector.capabilities();
     const tool = name => { try { return Boolean(ctx.tools?.get?.(name, agent)); } catch { return false; } };
-    const service = name => { try { return Boolean(ctx[name] ?? ctx.get?.(name)); } catch { return false; } };
+    const service = name => Boolean(optionalService(ctx, name));
     const enabled = { file_read: tool('read'), format_read: tool('read'), file_changed: tool('edit') || tool('write'),
       skill_loaded: tool('skill'), file_presented: tool('present'), recall_used: service('sessionReferenceResolver') };
     const recipes = { read_then_change: enabled.file_read && enabled.file_changed, skill_then_change: enabled.skill_loaded && enabled.file_changed,
@@ -173,13 +178,16 @@ export async function createAchievementJournal(ctx, config = {}) {
   function state() {
     const snapshot = journal.snapshot();
     const diagnostics = collector.diagnostics();
+    const auxiliary = generation?.accounting?.() ?? { knownTokens: 0, unknownCalls: 0, observedCalls: 0 };
     const degraded = ingestFailures > 0 || diagnostics.ingestErrors > 0 || diagnostics.boundedDrops > 0 || diagnostics.droppedQueue > 0;
     return { ...snapshot, notifications: notifications.filter(item => now() - item.seenAt < 300000),
+      generation: { ...(generation?.get?.() ?? { job: null }), accounting: auxiliary },
       coverage: { ...(snapshot.coverage ?? {}), mode: 'live_since_installation', since: snapshot.createdAt,
         historyImport: false, capabilities: capabilities(), diagnostics, ingestFailures, degraded,
-        complete: !storageUnavailable && snapshot.coverage?.complete !== false && !degraded,
+        complete: !storageUnavailable && snapshot.coverage?.complete !== false && !degraded && auxiliary.unknownCalls === 0,
         notes: ['只记录接入后完整观测到的新回合；没有自动导入历史。',
           ...(degraded ? ['部分事件未能入账或达到记录上限；当前数字为已记录下界，请检查存储状态。'] : []),
+          ...(auxiliary.unknownCalls > 0 ? ['部分成就生成调用缺少完整用量回执，累计只包含已记录用量。'] : []),
           ...(storageUnavailable ? ['档案暂不可用，原始数据已保留；恢复存储后重新启用。'] : [])] } };
   }
   function context(exec) {
@@ -191,13 +199,40 @@ export async function createAchievementJournal(ctx, config = {}) {
     return remember(await journal[method](input, access));
   }
   if (config.collect !== false && !storageUnavailable) await collector.start();
+  const recordGenerationUsage = async receipt => {
+    // A generation is an auxiliary call, never a synthetic work turn. Its
+    // proven usage can contribute once; absent disclosure stays in the
+    // generation receipt as unknown, without fabricating zero tokens.
+    if (disposed) throw error('辅助用量仍在等待恢复入账。', 503, 'JOURNAL_CLOSED');
+    if (!receipt.usage || !Number.isSafeInteger(receipt.totalTokens) || receipt.totalTokens < 0) return;
+    const usage = { totalTokens: receipt.totalTokens };
+    const fields = { inputTokens: 'uncachedInputTokens', outputTokens: 'outputTokens', cacheReadTokens: 'cacheReadTokens', cacheWriteTokens: 'cacheWriteTokens', reasoningTokens: 'reasoningTokens' };
+    for (const [key, target] of Object.entries(fields)) if (Number.isSafeInteger(receipt.usage[key]) && receipt.usage[key] >= 0) usage[target] = receipt.usage[key];
+    const id = hashKey(`generation:${receipt.id}`);
+    try {
+      remember(await journal.ingest([{ id: `generation:${id}`, kind: 'tokens', at: receipt.at,
+        sessionId: `aux:${id}`, turnKey: `aux:${id}`, amount: receipt.totalTokens,
+        evidence: { source: 'auxiliary_generation', usage, callKey: `aux:${id}` } }]));
+    } catch (e) { ingestFailures++; throw e; }
+  };
+  try {
+    generation = await createGenerationController({ ctx, journal, collector, catalog, apply: async (input, access) => {
+      if (disposed || closing) throw error('成就手记正在关闭。', 503);
+      const applied = await journal.configure(input, access); remember(applied); return applied;
+    },
+      recordUsage: recordGenerationUsage, file: statePath + '.generation-v1.json', hashKey, now });
+  } catch {
+    generation = { info: async () => ({ available: false, reason: '生成回执暂不可用，原文件已保留。' }),
+      get: () => ({ job: null }), accounting: () => ({ knownTokens: 0, unknownCalls: 0, observedCalls: 0 }),
+      start: async () => { throw error('生成回执暂不可用。', 503); }, cancel: async () => { throw error('生成回执暂不可用。', 503); }, dispose: async () => {} };
+  }
   if (config.registerTools !== false) {
     const register = definition => {
       const dispose = ctx.tools.register(defineTool({ ...definition, output: toolOutput }));
       if (typeof dispose === 'function') disposers.push(dispose);
     };
     register({ name: 'achievement_catalog', description: 'Query supported achievement metrics, rule recipes, icons, themes and observation coverage before configuring achievements. This does not trigger model calls.',
-      parameters: {}, execute: (_args, exec) => catalog(exec.agent) });
+      parameters: {}, execute: async (_args, exec) => ({ ...catalog(exec.agent), generation: await generation.info({ sessionId: exec.agent?.session.id }) }) });
     register({ name: 'achievement_query', description: 'Read personal achievement progress and earned records. Token totals are observed use, not business quality or acceptance.',
       parameters: { id: { type: 'string', description: 'Optional definition id.' }, history: { type: 'boolean', description: 'Include the most recent 20 records.' } },
       execute: args => { const s = state(); return { revision: s.revision, preferences: s.preferences, totals: s.totals, level: s.level,
@@ -227,12 +262,19 @@ export async function createAchievementJournal(ctx, config = {}) {
         const admission = ctx.connection.admit(req);
         if ('rejection' in admission) return json(res, admission.rejection, { error: '需要 DSH 浏览器登录。' });
         if (admission.peer.id !== ctx.connection.browserPeer.id) return json(res, 403, { error: '仅当前浏览器用户可访问。' });
-        const path = new URL(req.url, 'http://local').pathname;
+        const url = new URL(req.url, 'http://local'); const path = url.pathname;
         if (req.method === 'GET' && path === API + '/state') return json(res, 200, state());
-        if (req.method === 'GET' && path === API + '/catalog') return json(res, 200, catalog());
+        if (req.method === 'GET' && path === API + '/catalog') {
+          const sessionId = url.searchParams.get('sessionId') || undefined;
+          let agent; try { agent = sessionId ? optionalService(ctx, 'agents')?.get?.(sessionId) : undefined; } catch { /* use the default/global view */ }
+          return json(res, 200, { ...catalog(agent), generation: await generation.info({ sessionId }) });
+        }
+        if (req.method === 'GET' && path === API + '/generation') return json(res, 200, generation.get(url.searchParams.get('id') || undefined));
         if (req.method === 'POST') {
           if (req.headers['sec-fetch-site'] === 'cross-site') throw error('拒绝跨站写入。', 403);
           if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host) throw error('来源不匹配。', 403);
+          if (path === API + '/generation') return json(res, 200, await generation.start(await bodyOf(req)));
+          if (path === API + '/generation/cancel') { const body = await bodyOf(req); return json(res, 200, await generation.cancel(body.id)); }
           const method = ({ preferences: 'preferences', equip: 'equip', configure: 'configure', report: 'report' })[path.slice(API.length + 1)];
           if (method) return json(res, 200, await mutate(method, await bodyOf(req)));
         }
@@ -241,14 +283,15 @@ export async function createAchievementJournal(ctx, config = {}) {
         const code = String(e.code);
         const storageError = ['PERSISTENCE_FAILED', 'DURABILITY_UNCERTAIN', 'CORRUPT_STATE', 'SCHEMA_UNSUPPORTED', 'LOCK_HELD', 'CLOSED', 'BUDGET_EXCEEDED', 'COUNTER_OVERFLOW'].includes(code);
         const status = e.status ?? (storageError ? 503 : /CONFLICT|ARCHIVED|IMMUTABLE|REQUEST_ID_REUSED/.test(code) ? 409 : e.name === 'JournalError' || code.includes('INVALID') ? 400 : 500);
-        json(res, status, { error: status >= 500 ? '成就存储暂不可用，已保留原档案，请查看宿主日志。' : e.message, code: e.code ?? 'JOURNAL_UNAVAILABLE' });
+        json(res, status, { error: code.startsWith('GENERATION_') || status < 500 ? e.message : '成就存储暂不可用，已保留原档案，请查看宿主日志。', code: e.code ?? 'JOURNAL_UNAVAILABLE' });
       }
     } }));
   }
-  return { journal, collector, snapshot: state, catalog, mutate,
+  return { journal, collector, generation, snapshot: state, catalog, mutate,
     async dispose() {
       if (disposed || closing) return; closing = true;
       for (const dispose of disposers.reverse()) await dispose?.();
+      await generation.dispose();
       await collector.dispose(); disposed = true; await journal.close(); notifications = [];
     },
   };

@@ -14,7 +14,8 @@ const run = (command, args, env = {}) => {
   if (result.status !== 0) { process.stderr.write(result.stdout ?? ''); process.stderr.write(result.stderr ?? ''); throw new Error(`${command} failed (${result.status})`); }
   return result.stdout;
 };
-const tests = run(process.execPath, ['--test', '--test-reporter=tap', 'tests/journal.test.mjs', 'tests/collector.test.mjs', 'tests/client.test.mjs', 'tests/integration.test.mjs', 'tests/http.test.mjs']);
+const testFiles = (await readdir(join(root, 'tests'))).filter(name => name.endsWith('.test.mjs')).sort().map(name => 'tests/' + name);
+const tests = run(process.execPath, ['--test', '--test-reporter=tap', ...testFiles]);
 await writeFile(join(out, 'source-tests.tap'), tests);
 assert.match(tests, /# fail 0/); assert.match(tests, /# skipped 0/);
 run(process.execPath, ['scripts/build.mjs']);
@@ -33,7 +34,7 @@ run('/usr/bin/tar', ['-xzf', archive, '-C', extracted]);
 const artifact = join(extracted, 'package');
 // Tests use only the unpacked code; the same locked dev runtime supplies peers.
 run('/bin/ln', ['-s', join(root, 'node_modules'), join(artifact, 'node_modules')]);
-const artifactTests = run(process.execPath, ['--test', '--test-reporter=tap', 'tests/integration.test.mjs', 'tests/http.test.mjs'], { JOURNAL_ARTIFACT: artifact });
+const artifactTests = run(process.execPath, ['--test', '--test-reporter=tap', 'tests/integration.test.mjs', 'tests/http.test.mjs', 'tests/generation-integration.test.mjs'], { JOURNAL_ARTIFACT: artifact });
 await writeFile(join(out, 'artifact-tests.tap'), artifactTests);
 assert.match(artifactTests, /# fail 0/); assert.match(artifactTests, /# skipped 0/);
 const bytes = await readFile(archive); const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));

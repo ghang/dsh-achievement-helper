@@ -47,7 +47,8 @@ export function createCollector({ ctx, ingest, hashKey = sha, clock = Date.now, 
     return `${namespace}:${output}`;
   }
   function service(name) {
-    try { return ctx[name] ?? ctx.get?.(name); } catch { return undefined; }
+    try { const found = ctx.get?.(name); if (found !== undefined) return found; } catch { /* optional service may be absent */ }
+    try { return ctx[name]; } catch { return undefined; }
   }
   function time(value) {
     if (count(value)) return value;

@@ -41,7 +41,10 @@ window.__ModuleLoader__.load({
       file_changed: '文件变更', formats: '探索格式', format: '格式',
       skills: '技能足迹', skill_loaded: '技能加载', delegations: '协作经历',
       presentations: '交付展示', routes: '模型路由', recalls: '历史回顾',
+      format_read: '格式探索', delegate_completed: '子代理协作', file_presented: '交付展示', route_used: '模型路由', recall_used: '历史回顾',
     };
+    const METRIC_HINTS = { tokens: '已记录的模型用量', turn_completed: '完成的会话回合', file_read: '读过的文件', file_changed: '确认发生的变更', format_read: '不同文件格式', skill_loaded: '实际加载的技能', delegate_completed: '完成的子代理协作', file_presented: '真实的交付展示', route_used: '使用过的模型路由', recall_used: '历史回顾足迹' };
+    const GENERATION_STYLES = [{ id: 'balanced', label: '均衡成长', description: '积累、探索和一点惊喜' }, { id: 'discovery', label: '探索惊喜', description: '首次经历与动作组合' }, { id: 'milestone', label: '长期里程碑', description: '更少目标，慢慢积累' }];
     const GLYPHS = {
       star: 'M12 2 15 9l7 3-7 3-3 7-3-7-7-3 7-3Z',
       spark: 'M12 2v5m0 10v5M2 12h5m10 0h5M5 5l3 3m8 8 3 3M5 19l3-3m8-8 3-3',
@@ -66,6 +69,9 @@ window.__ModuleLoader__.load({
     let timer;
     let flight;
     let catalogFlight;
+    let clientContext;
+    let generationTimer;
+    let generationFlight;
     let actionCount = 0;
     let feedbackTimer;
     let toastTimer;
@@ -86,6 +92,7 @@ window.__ModuleLoader__.load({
         data: null, catalog: null, loading: true, connected: false,
         error: null, catalogError: null, actionError: null, busy: false,
         open: false, tab: 'overview', toast: null, notice: null, owner: null,
+        generationJob: null, generationLoading: true, generationBusy: false, generationError: null,
       };
     }
     function publish(patch) {
@@ -96,6 +103,27 @@ window.__ModuleLoader__.load({
     function currentSnapshot() { return snapshot; }
     function useJournal() { return useSyncExternalStore(subscribe, currentSnapshot, currentSnapshot); }
     function array(value) { return Array.isArray(value) ? value : []; }
+    function optionalClientService(name) {
+      if (!clientContext) return undefined;
+      try {
+        if (typeof clientContext.get === 'function') {
+          const service = clientContext.get(name);
+          if (service !== undefined && service !== null) return service;
+        }
+      } catch (_error) { /* Plain test contexts can still provide a data property. */ }
+      try {
+        const property = Object.getOwnPropertyDescriptor(clientContext, name);
+        return property && Object.prototype.hasOwnProperty.call(property, 'value') ? property.value : undefined;
+      } catch (_error) { return undefined; }
+    }
+    function currentSessionId() {
+      try {
+        const service = optionalClientService('uiSession');
+        const source = service && service.adapter && service.adapter.current;
+        const binding = source && typeof source.getSnapshot === 'function' && source.getSnapshot();
+        return binding && typeof binding.key === 'string' && binding.key ? binding.key : undefined;
+      } catch (_error) { return undefined; }
+    }
     function finite(value) { return typeof value === 'number' && Number.isFinite(value); }
     function exact(value) { return finite(value) ? value.toLocaleString('zh-CN') : '—'; }
     function compact(value) {
@@ -287,12 +315,68 @@ window.__ModuleLoader__.load({
     function refreshCatalog() {
       if (catalogFlight || !active) return catalogFlight || Promise.resolve();
       const epoch = generation;
-      catalogFlight = request('/catalog').then(function (data) {
+      const sessionId = currentSessionId();
+      catalogFlight = request('/catalog' + (sessionId ? '?sessionId=' + encodeURIComponent(sessionId) : '')).then(function (data) {
         if (active && generation === epoch) publish({ catalog: data, catalogError: null });
       }).catch(function (error) {
         if (active && generation === epoch) publish({ catalogError: error.message || '能力目录暂不可用。' });
       }).finally(function () { if (generation === epoch) catalogFlight = null; });
       return catalogFlight;
+    }
+    function runningJob(job) { return Boolean(job && job.status === 'running'); }
+    function acceptGeneration(value, requestedId) {
+      const job = value && value.job;
+      if (job !== null && (!job || typeof job.id !== 'string' || !['running', 'succeeded', 'failed', 'cancelled'].includes(job.status))) throw new Error('生成任务返回了无法识别的状态，请重试同步。');
+      const previous = snapshot.generationJob;
+      if (requestedId && previous && previous.id !== requestedId) return;
+      if (previous && job && previous.id === job.id) {
+        if (!runningJob(previous) && runningJob(job)) return;
+        if (new Date(job.updatedAt).getTime() < new Date(previous.updatedAt).getTime()) return;
+      }
+      publish({ generationJob: job, generationLoading: false, generationError: null });
+      clearTimeout(generationTimer);
+      if (runningJob(job)) generationTimer = setTimeout(function () { void refreshGeneration(job.id); }, 1200);
+      else if (job && job.status === 'succeeded' && (!previous || previous.id !== job.id || previous.status !== 'succeeded')) {
+        const epoch = generation, pending = flight;
+        if (pending) void pending.then(function () { if (active && generation === epoch) void refresh(); });
+        else void refresh();
+      }
+    }
+    function refreshGeneration(id) {
+      if (!active || generationFlight) return generationFlight || Promise.resolve();
+      const epoch = generation;
+      generationFlight = request('/generation' + (id ? '?id=' + encodeURIComponent(id) : '')).then(function (value) {
+        if (active && epoch === generation) acceptGeneration(value, id);
+      }).catch(function (error) {
+        if (!active || epoch !== generation) return;
+        publish({ generationLoading: false, generationError: error.message || '暂时无法同步生成任务。' });
+        if (runningJob(snapshot.generationJob)) generationTimer = setTimeout(function () { void refreshGeneration(snapshot.generationJob.id); }, 2500);
+      }).finally(function () { if (epoch === generation) generationFlight = null; });
+      return generationFlight;
+    }
+    async function startGeneration(options) {
+      if (!active || snapshot.generationBusy || snapshot.generationLoading || runningJob(snapshot.generationJob)) return;
+      const epoch = generation, body = Object.assign({ requestId: requestId() }, options);
+      const sessionId = currentSessionId(); if (sessionId) body.sessionId = sessionId;
+      publish({ generationBusy: true, generationError: null });
+      try {
+        const value = await request('/generation', { method: 'POST', body: JSON.stringify(body) });
+        if (!value || !value.job) throw new Error('服务没有返回生成任务，请重试同步。');
+        if (active && epoch === generation) acceptGeneration(value);
+      } catch (error) {
+        if (active && epoch === generation) publish({ generationError: error.message || '生成任务启动失败，请重试。' });
+      } finally { if (active && epoch === generation) publish({ generationBusy: false }); }
+    }
+    async function cancelGeneration() {
+      const job = snapshot.generationJob;
+      if (!runningJob(job) || job.stage === 'applying' || snapshot.generationBusy) return;
+      const epoch = generation; publish({ generationBusy: true, generationError: null });
+      try {
+        const value = await request('/generation/cancel', { method: 'POST', body: JSON.stringify({ id: job.id }) });
+        if (active && epoch === generation) acceptGeneration(value, job.id);
+      } catch (error) {
+        if (active && epoch === generation) publish({ generationError: error.message || '取消失败，请重试同步。' });
+      } finally { if (active && epoch === generation) publish({ generationBusy: false }); }
     }
     async function mutate(path, body) {
       if (!active || actionCount) return false;
@@ -331,16 +415,11 @@ window.__ModuleLoader__.load({
         showNotice('已复制。回到工作会话粘贴，由模型读取目录并保存配置。');
       } catch (error) { publish({ actionError: error.message || '复制失败，请手动选择文本复制。' }); }
     }
-    function modelPrompt(text, data) {
-      return '请使用成就手记插件，为我配置以下个人成就：\n\n' + text.trim() +
-        '\n\n请先读取插件的能力目录，选择确实可用的指标或配方，再调用插件配置工具保存。' +
-        '只描述可验证的使用经历，不把 Token、工具次数等同于工作质量；需要模型判断的里程碑请使用 model_report 并保留来源。' +
-        '按' + theme(data).name + '主题命名，保留规则和进度含义。配置完成后告诉我实际保存的成就，不要把建议当作已配置。';
-    }
 
     function Icon(props) {
       const name = props.name || 'star';
-      return h('svg', { width: props.size || 18, height: props.size || 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
+      const size = Math.max(12, Math.round((props.size || 18) * .83));
+      return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true },
         h('path', { d: GLYPHS[name] || GLYPHS.star }));
     }
     function Button(props) {
@@ -354,7 +433,7 @@ window.__ModuleLoader__.load({
       const item = props.item || {};
       const skin = props.theme || 'explorer';
       const id = 'daj-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
-      const size = props.size || 64;
+      const size = Math.round((props.size || 64) * .8);
       const locked = props.locked;
       const glyph = locked && item.hidden ? GLYPHS.spark : GLYPHS[item.icon] || GLYPHS[item.category] || GLYPHS.star;
       const svgProps = { width: size, height: Math.round(size * 1.12), viewBox: '0 0 100 112', className: 'daj-badge' + (locked ? ' daj-locked-art' : ''), 'aria-hidden': true };
@@ -537,31 +616,62 @@ window.__ModuleLoader__.load({
     }
     function ModelConfiguration(props) {
       const data = props.data;
-      const [prompt, setPrompt] = useState('');
+      const state = props.state;
+      const [selectedMetrics, setSelectedMetrics] = useState(null);
+      const [generationTheme, setGenerationTheme] = useState(themeId(data));
+      const [direction, setDirection] = useState('');
+      const [style, setStyle] = useState('balanced');
       const [showSummary, setShowSummary] = useState(false);
       const models = array(data.definitions).filter(function (item) { return item.source === 'model'; });
-      const examples = [
-        ['积累目标', '为我设置一个从现在开始累计使用 1M token 的长期成就，名字有一点' + theme(data).name + '味道。'],
-        ['探索足迹', '围绕我实际读过的文件格式、加载过的技能，以及先读后改的经历，配置几枚有惊喜的成就。只选插件目前确实支持的条件。'],
-        ['任务纪念', '为这次工作配置一枚交付纪念。需要你判断的条件请明确使用模型记录，达成时附实际依据。'],
-      ];
+      const metrics = array(props.catalog && props.catalog.metrics).filter(function (item) { return item && typeof item.id === 'string' && item.id !== 'recipe'; });
+      const metricIds = metrics.map(function (item) { return item.id; });
+      const sources = array(props.catalog && props.catalog.capabilities && props.catalog.capabilities.sources);
+      const unavailableIds = sources.filter(function (item) { return item && item.connected === false; }).map(function (item) { return item.kind; });
+      const availableIds = metricIds.filter(function (id) { return !unavailableIds.includes(id); });
+      const selected = selectedMetrics === null ? availableIds : selectedMetrics.filter(function (id) { return availableIds.includes(id); });
+      const capability = props.catalog && props.catalog.generation;
+      const styles = array(capability && capability.styles).filter(function (item) { return item && GENERATION_STYLES.some(function (choice) { return choice.id === item.id; }); });
+      const choices = styles.length ? styles : GENERATION_STYLES;
+      const job = state.generationJob;
+      const running = runningJob(job), busy = state.generationBusy || running || state.generationLoading;
+      const route = capability && capability.route;
+      const routeLabel = route && [route.provider, route.model].filter(function (part) { return typeof part === 'string' && part; }).join(' / ');
+      function toggleMetric(id) {
+        if (!availableIds.includes(id)) return;
+        setSelectedMetrics(selected.includes(id) ? selected.filter(function (value) { return value !== id; }) : selected.concat(id));
+      }
       return h(React.Fragment, null,
-        h(PageHeading, { title: '你说目标，模型来配置', description: '在工作会话中描述你想留下的经历，模型通过插件接口保存规则。' }),
+        h(PageHeading, { title: '生成一份自己的成就手记', description: '选好数据来源和风格，让模型分析、生成，并自动应用。' }),
         h('div', { className: 'daj-model-layout' },
           h('section', { className: 'daj-card daj-section daj-model-panel' },
-            h('div', { className: 'daj-section-heading' }, h('div', null, h('div', { className: 'daj-eyebrow' }, 'MAKE IT YOURS'), h('h3', null, '一段话，一份自己的手记')), h(Icon, { name: 'spark', size: 26 })),
-            h('p', { className: 'daj-model-intro' }, '不用先学配置。把想积累的目标、想纪念的时刻说给当前会话的模型。'),
-            h('div', { className: 'daj-prompt-examples' }, examples.map(function (entry) {
-              return h(Button, { key: entry[0], className: 'daj-chip', onClick: function () { setPrompt(entry[1]); } }, entry[0]);
-            })),
-            h('label', { className: 'daj-field-label', htmlFor: 'daj-model-prompt' }, '你想记录什么'),
-            h('textarea', { id: 'daj-model-prompt', className: 'daj-prompt', rows: 5, value: prompt, placeholder: '例如：想为自己在不同文件与工具间探索的经历，留几枚修仙风格的灵章。', onChange: function (event) { setPrompt(event.target.value); } }),
-            h('div', { className: 'daj-model-flow' }, h('span', null, h(Icon, { name: 'chat', size: 14 }), '你的描述'), h(Icon, { name: 'chevron', size: 12 }), h('span', null, h(Icon, { name: 'spark', size: 14 }), '会话中的模型'), h(Icon, { name: 'chevron', size: 12 }), h('span', null, h(Icon, { name: 'check', size: 14 }), '插件真实保存')),
-            h(Button, { className: 'daj-primary daj-wide', disabled: !prompt.trim(), onClick: function () { void copyText(modelPrompt(prompt, data)); } }, h(Icon, { name: 'copy', size: 15 }), '复制给模型'),
-            h('p', { className: 'daj-hint' }, '复制后回到工作会话粘贴发送。这里不会调用模型，也不会根据示例按钮自动生成成就。'),
-            h('section', { className: 'daj-model-instructions' }, h(Icon, { name: 'book', size: 22 }), h('strong', null, '规则，由真实记录推进'), h('p', null, '自动统计跟随使用经历；模型判断的纪念单独标明来源。配置完成后，实际保存的条目会出现在右侧。')),
+            h('fieldset', { className: 'daj-generation-fieldset', disabled: busy },
+              h('legend', null, h('span', null, '1'), '选择数据来源'),
+              h('div', { className: 'daj-source-tools' }, h('small', null, '已选 ' + selected.length + ' 项'), h(Button, { className: 'daj-text-button', disabled: busy || !availableIds.length, onClick: function () { setSelectedMetrics(availableIds); } }, '全选'), h(Button, { className: 'daj-text-button', disabled: busy || !selected.length, onClick: function () { setSelectedMetrics([]); } }, '清空')),
+              h('div', { className: 'daj-source-grid' }, metrics.map(function (item) {
+                const available = availableIds.includes(item.id);
+                return h('label', { className: 'daj-source-choice' + (selected.includes(item.id) ? ' daj-selected' : '') + (!available ? ' daj-source-unavailable' : ''), key: item.id },
+                  h('input', { id: 'daj-metric-' + item.id, type: 'checkbox', checked: selected.includes(item.id), disabled: busy || !available, onChange: function () { toggleMetric(item.id); } }),
+                  h('span', null, h('strong', null, item.label || METRIC_NAMES[item.id] || item.id), h('small', null, available ? METRIC_HINTS[item.id] || '已接入的真实使用记录' : '当前环境不可用')));
+              })),
+              !metrics.length ? h('p', { className: 'daj-hint' }, props.catalogError ? '数据来源暂时无法读取。' : '正在读取可用的数据来源…') : null),
+            h('fieldset', { className: 'daj-generation-fieldset', disabled: busy }, h('legend', null, h('span', null, '2'), '选择主题方向'),
+              h('div', { className: 'daj-direction-row' },
+                h('label', null, h('span', { className: 'daj-field-label' }, '主题'), h('select', { id: 'daj-generation-theme', value: generationTheme, disabled: busy, onChange: function (event) { setGenerationTheme(event.target.value); } }, Object.keys(THEMES).map(function (id) { return h('option', { key: id, value: id }, THEMES[id].name); }))),
+                h('label', { className: 'daj-grow' }, h('span', { className: 'daj-field-label' }, '方向补充 · 可选'), h('input', { id: 'daj-generation-direction', className: 'daj-direction-input', type: 'text', value: direction, maxLength: 120, disabled: busy, placeholder: '例如：山海问道、城市夜航、星际漫游', onChange: function (event) { setDirection(event.target.value); } })))),
+            h('fieldset', { className: 'daj-generation-fieldset', disabled: busy }, h('legend', null, h('span', null, '3'), '选择模板风格'),
+              h('div', { className: 'daj-style-grid' }, choices.map(function (choice) {
+                return h('label', { key: choice.id, className: 'daj-style-choice' + (style === choice.id ? ' daj-selected' : '') }, h('input', { type: 'radio', name: 'daj-generation-style', value: choice.id, checked: style === choice.id, disabled: busy, onChange: function () { setStyle(choice.id); } }), h('strong', null, choice.label), h('small', null, choice.description));
+              }))),
+            capability && capability.available === false ? h('div', { className: 'daj-generation-unavailable', role: 'status' }, capability.reason || '当前没有可用的生成模型。请先在 DSH 中选择模型，再重试。', h(Button, { className: 'daj-text-button', onClick: refreshCatalog }, '重新检查')) : null,
+            h(Button, { className: 'daj-primary daj-wide', disabled: !capability || capability.available !== true || !selected.length || busy, onClick: function () {
+              const options = { metrics: selected, theme: generationTheme, style: style };
+              if (direction.trim()) options.direction = direction.trim();
+              void startGeneration(options);
+            } }, h(Icon, { name: 'spark', size: 17 }), state.generationBusy && !running ? '正在启动…' : running ? '正在生成…' : state.generationLoading ? '正在同步任务…' : '分析并生成成就'),
+            h('p', { className: 'daj-hint daj-generation-caption' }, routeLabel ? '本次使用' + (capability.routeSource === 'session' ? '当前会话模型' : '默认模型') + ' · ' + routeLabel : '使用当前会话或默认模型。', ' 一次生成会调用模型；校验通过后自动应用，失败不应用。'),
+            h(GenerationStatus, { state: state, select: props.select }),
             props.catalogError ? h('div', { className: 'daj-inline-error', role: 'alert' }, props.catalogError, h(Button, { className: 'daj-text-button', onClick: refreshCatalog }, '重试目录')) : null,
-            props.catalog ? h('p', { className: 'daj-hint' }, '能力目录已连接 · ' + array(props.catalog.metrics).length + ' 项指标 · ' + array(props.catalog.templates).length + ' 类规则') : null),
+            props.catalog ? h('p', { className: 'daj-hint daj-generation-caption' }, '组合经历会根据所选数据自动匹配；用量与次数描述使用经历，不评价工作质量。') : null),
           h('section', { className: 'daj-model-list' },
             h('div', { className: 'daj-section-heading' }, h('h3', null, '模型已配置'), h('span', { className: 'daj-count' }, models.length + ' 项')),
             models.length ? models.map(function (item) {
@@ -570,9 +680,25 @@ window.__ModuleLoader__.load({
                 h('div', { className: 'daj-row' }, h(Badge, { item: item, theme: themeId(data), size: 45, locked: !unlocked(item) }), h('div', { className: 'daj-grow' }, h('h3', null, name.title), h('p', null, name.description)), h(Pill, null, sourceLabel(awardFor(data, item.id) || item))),
                 item.status === 'archived' ? h('small', { className: 'daj-muted' }, '已归档 · 已获得记录仍保留') : unlocked(item) ? h('small', { className: 'daj-muted' }, '已达成 · ' + date(item.unlockedAt)) : concealed(item, data) ? h('small', { className: 'daj-muted' }, '尚未揭晓 · 期待某个自然发生的瞬间') : !modelReport(item) ? h(Progress, { value: item.progress, target: item.target, label: name.title }) : h('small', { className: 'daj-muted' }, '等待会话中的模型核对后记录'),
                 h('div', { className: 'daj-row daj-model-footer' }, h('span', { className: 'daj-hint' }, concealed(item, data) ? '惊喜条件暂不展示' : ruleSummary(item)), h(Button, { className: 'daj-text-button', onClick: function () { props.select(item.id); } }, '查看'))); })
-              : h('section', { className: 'daj-card' }, h(Empty, { title: '你的第一份配置，还没到来', icon: 'spark' }, '把左侧的描述带给模型。只有实际保存的成就才会列在这里。')),
+              : h('section', { className: 'daj-card daj-model-empty' }, h(Empty, { title: '你的第一份配置，还没到来', icon: 'spark' }, '选择数据和风格，点击生成。实际保存的成就会出现在这里。')),
             h('label', { className: 'daj-summary-toggle' }, h('input', { type: 'checkbox', checked: showSummary, onChange: function (event) { setShowSummary(event.target.checked); } }), '显示当前配置摘要'),
             showSummary ? h('pre', { className: 'daj-config-summary' }, JSON.stringify(models.map(function (item) { return { id: item.id, title: item.title, status: item.status, rule: item.rule, scope: item.scope }; }), null, 2)) : null)));
+    }
+    function GenerationStatus(props) {
+      const state = props.state, job = state.generationJob;
+      const labels = { analyzing: '分析使用记录', generating: '生成成就规则', applying: '校验并自动应用', done: '处理完成' };
+      const running = runningJob(job);
+      const createdIds = array(job && job.createdDefinitionIds);
+      const readyId = createdIds.find(function (id) { return definitionFor(state.data, id); });
+      return h(React.Fragment, null,
+        job ? h('section', { className: 'daj-generation-status daj-generation-' + job.status, role: 'status', 'aria-live': 'polite', 'aria-atomic': true },
+          h('div', { className: 'daj-row' }, h(Icon, { name: job.status === 'succeeded' ? 'check' : job.status === 'failed' ? 'flag' : 'spark', size: 18 }), h('strong', { className: 'daj-grow' }, running ? labels[job.stage] || '生成任务进行中' : job.status === 'succeeded' ? '已生成并应用 ' + array(job.createdDefinitionIds).length + ' 项成就' : job.status === 'cancelled' ? '已取消本次生成' : '本次生成未完成'),
+            running ? h(Button, { className: 'daj-text-button', disabled: state.generationBusy || job.stage === 'applying', onClick: function () { void cancelGeneration(); } }, job.stage === 'applying' ? '正在应用' : '取消生成') : null),
+          running ? h('div', { className: 'daj-job-progress', role: 'progressbar', 'aria-label': '成就生成进度', 'aria-valuetext': labels[job.stage] || job.message || '正在处理' }, h('i')) : null,
+          job.message ? h('p', null, job.message) : null,
+          job.status === 'succeeded' && createdIds.length ? h(Button, { className: 'daj-text-button', disabled: !readyId, onClick: function () { if (readyId) props.select(readyId); } }, readyId ? '查看新成就' : '正在同步新成就…', h(Icon, { name: 'chevron', size: 12 })) : null,
+          finite(job.totalTokens) ? h('small', null, '本次生成模型用量 · ' + exact(job.totalTokens) + ' token') : null) : null,
+        state.generationError ? h('div', { className: 'daj-inline-error', role: 'alert' }, h('span', null, state.generationError), h(Button, { className: 'daj-text-button', disabled: state.generationBusy, onClick: function () { void refreshGeneration(job && job.id); } }, '重试任务同步')) : null);
     }
 
     function History(props) {
@@ -643,9 +769,11 @@ window.__ModuleLoader__.load({
       const state = props.state;
       const data = state.data;
       const panel = useRef(null);
+      const body = useRef(null);
       const [settingsOpen, setSettingsOpen] = useState(false);
       const [selection, setSelection] = useState(null);
       useDialogFocus(panel, function () { if (settingsOpen) setSettingsOpen(false); else closeCenter(); });
+      useEffect(function () { if (body.current) body.current.scrollTop = 0; }, [state.tab]);
       const t = theme(data);
       function navigate(tab) { publish({ tab: tab }); }
       function select(id) { setSelection(id); navigate('collection'); }
@@ -659,7 +787,7 @@ window.__ModuleLoader__.load({
           h('nav', { className: 'daj-tabs', 'aria-label': '成就页面' }, TAB_IDS.map(function (id, index) {
             return h('button', { type: 'button', key: id, className: state.tab === id ? 'daj-active-tab' : '', 'aria-current': state.tab === id ? 'page' : undefined, onClick: function () { navigate(id); } }, t.tabs[index]);
           })),
-          h('div', { className: 'daj-center-body' },
+          h('div', { className: 'daj-center-body', ref: body },
             state.error ? h('div', { className: 'daj-error-banner', role: 'alert' }, h('span', null, state.error + (data ? ' 当前显示上次同步的记录。' : '')), h(Button, { onClick: refresh }, '重新连接')) : null,
             state.actionError ? h('div', { className: 'daj-error-banner', role: 'alert' }, h('span', null, state.actionError), h(Button, { className: 'daj-icon-button', 'aria-label': '收起操作错误', onClick: function () { publish({ actionError: null }); } }, h(Icon, { name: 'close', size: 14 }))) : null,
             data && data.coverage && data.coverage.complete === false ? h('p', { className: 'daj-coverage-note', role: 'status' }, '部分经历的证据尚不完整，相关进度暂时显示为 —；已确认的记录仍会保留。') : null,
@@ -667,7 +795,7 @@ window.__ModuleLoader__.load({
             data ? h('div', { className: 'daj-page' },
               state.tab === 'overview' ? h(Overview, { data: data, navigate: navigate, select: select }) : null,
               state.tab === 'collection' ? h(Collection, { data: data, busy: state.busy, selected: selection }) : null,
-              state.tab === 'model' ? h(ModelConfiguration, { data: data, catalog: state.catalog, catalogError: state.catalogError, select: select }) : null,
+              state.tab === 'model' ? h(ModelConfiguration, { data: data, state: state, catalog: state.catalog, catalogError: state.catalogError, select: select }) : null,
               state.tab === 'history' ? h(History, { data: data, select: select }) : null,
               h('footer', { className: 'daj-page-footer' }, h('span', null, h(Icon, { name: 'check', size: 12 }), '个人积累，留在自己的手记里'), h('span', null, state.connected ? '已同步 · ' + date(data.updatedAt, true) : '等待重新连接')))
               : h(Empty, { title: state.loading ? '正在翻开你的手记…' : '暂时还没连接上手记', icon: 'book' }, state.loading ? '正在读取本机已保存的真实记录。' : '请重试连接，或检查插件是否已在宿主中启用。'))));
@@ -718,13 +846,17 @@ window.__ModuleLoader__.load({
         h(Feedback, { state: state }),
         state.notice ? h('div', { className: 'daj-notice', role: 'status', 'aria-live': 'polite' }, state.notice) : null), document.body);
     }
-    function SidebarEntry() {
+    function SidebarEntry(props) {
       const state = useJournal(), data = state.data;
+      const badges = array(data && data.equipment && data.equipment.badges).slice(0, 3).map(function (id) { return definitionFor(data, id) || awardFor(data, id); }).filter(Boolean);
+      const charm = data && data.equipment && charmFor(data, data.equipment.charm);
+      const narrow = props.wide === false;
       return h(React.Fragment, null,
-        h('button', { type: 'button', className: 'daj-sidebar-entry', title: '打开成就手记', onClick: function () { openCenter('overview'); } },
-          h('span', { className: 'daj-sidebar-symbol' }, h(Icon, { name: 'medal', size: 17 })),
-          h('span', { className: 'daj-sidebar-copy' }, h('strong', null, '成就手记'), h('small', null, data ? 'Lv.' + exact(data.level.number) + ' · ' + allAwards(data).length + ' 枚收藏' : state.loading ? '正在连接' : '暂未连接')),
-          h(Icon, { name: 'chevron', size: 13 })),
+        h('button', { type: 'button', className: 'daj-surface daj-profile-strip' + (narrow ? ' daj-profile-narrow' : ''), 'data-daj-theme': themeId(data), title: '打开成就手记', 'aria-label': '打开成就手记', onClick: function () { openCenter('overview'); } },
+          narrow ? h(Icon, { name: 'medal', size: 17 }) : h(React.Fragment, null,
+            h('span', { className: 'daj-profile-level' }, data ? 'Lv.' + (data.level.isLowerBound || data.level.incomplete ? '≥' : '') + exact(data.level.number) : state.loading ? '…' : '—'),
+            badges.length ? h('span', { className: 'daj-profile-badges' }, badges.map(function (item) { return h('span', { key: item.id, title: presentation(item, data).title }, h(Badge, { item: item, theme: themeId(data), size: 18 })); })) : h('span', { className: 'daj-profile-empty' }, h(Icon, { name: 'medal', size: 14 }), '成就手记'),
+            charm ? h('span', { className: 'daj-profile-charm', title: presentation(charm, data).title }, h(Badge, { item: charm, theme: themeId(data), size: 16 })) : null)),
         h(GlobalSurface));
     }
     function SettingsSection() {
@@ -744,6 +876,7 @@ window.__ModuleLoader__.load({
     }
 
     function apply(ctx) {
+      clientContext = ctx;
       active = true; generation += 1;
       snapshot = initialState();
       actionCount = 0; needsBaseline = true; baselineRefreshPending = false; journalIdentity = null;
@@ -758,24 +891,36 @@ window.__ModuleLoader__.load({
         if (typeof dispose === 'function') disposers.push(dispose);
       }
       slot('settings.section', 'dsh-achievement-journal', 210, SettingsSection, { label: '成就手记' });
-      slot('sidebar.footer.action', 'dsh-achievement-journal-entry', 160, SidebarEntry);
+      slot('sidebar.footer.action', 'dsh-achievement-journal-entry', 9990, SidebarEntry);
+      try {
+        const service = optionalClientService('uiSession');
+        const source = service && service.adapter && service.adapter.current;
+        if (source && typeof source.subscribe === 'function') {
+          const unsubscribe = source.subscribe(function () {
+            const pending = catalogFlight;
+            if (pending) void pending.then(function () { if (active) void refreshCatalog(); });
+            else void refreshCatalog();
+          });
+          if (typeof unsubscribe === 'function') disposers.push(unsubscribe);
+        }
+      } catch (_error) { /* The backend can use the configured default model. */ }
       function visibility() {
         refreshBaseline();
       }
       function reconnect() { refreshBaseline(); }
       document.addEventListener('visibilitychange', visibility);
       window.addEventListener('online', reconnect);
-      void refresh(); void refreshCatalog();
+      void refresh(); void refreshCatalog(); void refreshGeneration();
       ctx.effect(function () { return function () {
         active = false; generation += 1;
-        clearTimeout(timer); clearTimeout(noticeTimer); clearFeedback();
+        clearTimeout(timer); clearTimeout(noticeTimer); clearTimeout(generationTimer); clearFeedback();
         controllers.forEach(function (controller) { controller.abort(); }); controllers.clear();
         document.removeEventListener('visibilitychange', visibility);
         window.removeEventListener('online', reconnect);
         disposers.forEach(function (dispose) { dispose(); });
         style.remove();
         listeners.clear(); surfaceOwners.clear(); seenNotifications.clear();
-        flight = null; catalogFlight = null; actionCount = 0;
+        flight = null; catalogFlight = null; generationFlight = null; clientContext = null; actionCount = 0;
       }; }, 'dsh-achievement-journal client cleanup');
     }
     return { inject: ['slots'], apply: apply };

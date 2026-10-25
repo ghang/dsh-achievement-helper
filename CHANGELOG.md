@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-rc.3
+
+Compact responsive layouts and smaller badges/icons. Replace prompt-copy setup
+with data-source, theme-direction and template-style selection followed by one
+bounded model generation and validated automatic application. Add cancellation,
+durable request deduplication and attributed auxiliary usage receipts. Render
+equipment as a slim frame next to the account area; preserve the native account
+menu. Existing collections and settings are retained on upgrade.
+
 ## 0.1.0-rc.2
 
 Freeze archived definitions and guard award creation by active status. Preserve
