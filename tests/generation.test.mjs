@@ -151,6 +151,31 @@ test('cancellation before prepared dispatch has no stream, application, or expen
   assert.deepEqual(f.c.accounting(), { knownTokens: 0, unknownCalls: 0, observedCalls: 0 });
 });
 
+test('cancellation during the durable dispatch marker does not invent an unknown paid call', async t => {
+  let controller, prepared = false, catalogs = 0, scheduled = false, dispatches = 0;
+  const cancellation = deferred();
+  const f = await fixture(t, {
+    catalog(agent, catalog) { catalogs++; return catalog; },
+    prepare(config) { prepared = true; return { config, stream: async function* () { dispatches++; } }; },
+    now() {
+      if (prepared && catalogs >= 3 && !scheduled) {
+        scheduled = true;
+        queueMicrotask(() => controller.cancel(controller.get().job.id).then(cancellation.resolve, cancellation.reject));
+      }
+      return Date.now();
+    },
+  });
+  controller = f.c;
+  await f.c.start(request('cancel-during-dispatch-marker'));
+  await cancellation.promise; const job = await waitFor(f.c);
+  assert.equal(job.status, 'cancelled'); assert.equal(dispatches, 0); assert.equal(f.applies.length, 0);
+  assert.equal(job.attempted, false); assert.equal(f.receipts.length, 0);
+  assert.deepEqual(f.c.accounting(), { knownTokens: 0, unknownCalls: 0, observedCalls: 0 });
+  await f.reopen(); assert.equal(f.c.get().job.attempted, false); assert.equal(f.receipts.length, 0);
+  assert.equal((await f.c.start(request('cancel-during-dispatch-marker'))).job.status, 'cancelled');
+  assert.equal(dispatches, 0);
+});
+
 test('cancellation retains real usage even when an upstream ignores its abort signal', async t => {
   const entered = deferred(), blocked = deferred();
   const f = await fixture(t, { stream: async function* () { yield { type: 'usage', usage }; entered.resolve(); await blocked.promise; yield* chunks(); } });
@@ -497,6 +522,23 @@ test('character generation tolerates counter, equipment and collection progress 
   assert.equal(f.journal.snapshot().equipment.charm, 'star');
   assert.equal(f.journal.snapshot().collection.draws.length, 1);
   assert.ok(f.journal.snapshot().collection.owned.length > 0);
+});
+
+test('portrait appearance changes do not stale or enter either kind of generation request', async t => {
+  for (const kind of ['achievements', 'characters']) {
+    const entered = deferred(), proceed = deferred();
+    const f = await fixture(t, { stream: async function* () { entered.resolve(); await proceed.promise; yield* chunks(kind === 'characters' ? characterOutput() : output()); } });
+    await f.c.start(kind === 'characters' ? characterRequest('style-character') : request('style-achievement', { count: 1 }));
+    await entered.promise; const before = f.journal.snapshot();
+    await f.journal.preferences({ portraitStyle: 'pixel' });
+    assert.deepEqual(f.journal.snapshot().collection, before.collection);
+    proceed.resolve(); const job = await waitFor(f.c);
+    assert.equal(job.status, 'succeeded'); assert.equal(f.calls.length, 1); assert.equal(f.applies.length, 1);
+    assert.equal(f.journal.snapshot().preferences.portraitStyle, 'pixel');
+    assert.ok(!JSON.stringify(f.calls[0]).includes('portraitStyle'));
+    assert.equal(kind === 'characters' ? job.createdCharacterIds.length : job.createdDefinitionIds.length, 1);
+    assert.equal(f.receipts.length, 1);
+  }
 });
 
 test('a concurrent character definition change rejects stale generated definitions and preserves usage', async t => {

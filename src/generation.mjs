@@ -294,7 +294,7 @@ export async function createGenerationController({ ctx, journal, collector, cata
     } catch { return { ...base, available: false, reason: '当前模型路由不可用，请在 DSH 重新选择模型。' }; }
   }
   async function run(owner, input) {
-    let timer, iterator, usage = null, outputBytes = 0, chunks = 0, sawFinish = false, terminal, applied = false;
+    let timer, iterator, usage = null, outputBytes = 0, chunks = 0, sawFinish = false, terminal, applied = false, dispatchStarted = false;
     const characterMode = input.kind === 'characters', label = characterMode ? '角色' : '成就';
     let committedUncertain = false, expectedIds = [], createdDefinitionIds = [], createdCharacterIds = [];
     const confirmCreated = snapshot => {
@@ -341,6 +341,7 @@ export async function createGenerationController({ ctx, journal, collector, cata
         if (remaining.maxCharacters !== selected.maxCharacters || remaining.maxDefinitions !== selected.maxDefinitions || configHash(beforeDispatch, input.kind) !== configHash(snapshot, input.kind)) fail('生成准备期间配置已变化，本次未发起模型请求。', 'GENERATION_REVISION_CONFLICT', 409);
       } catch (e) { await update(owner.id, { attempted: false }); throw e; }
       const assembler = new BlockAssembler();
+      dispatchStarted = true;
       iterator = prepared.stream({ ...prepared.config, system: instructions, messages: [{ role: 'user', content: [{ type: 'text', text: JSON.stringify(requested) }] }], tools: [], signal })[Symbol.asyncIterator]();
       for (;;) {
         checkRunning(owner);
@@ -401,7 +402,7 @@ export async function createGenerationController({ ctx, journal, collector, cata
     } catch (e) {
       const cancelled = !applied && signal.aborted && signal.reason?.code === 'GENERATION_CANCELLED';
       if (applied) { try { confirmCreated(journal.snapshot()); } catch { /* No unconfirmed ids are invented. */ } }
-      try { await update(owner.id, { status: applied ? 'succeeded' : cancelled ? 'cancelled' : 'failed', stage: 'done', usage, totalTokens: totalOf(usage), createdDefinitionIds, createdCharacterIds, code: committedUncertain ? 'DURABILITY_UNCERTAIN' : opaque(e?.code) ? e.code : 'GENERATION_FAILED', message: committedUncertain ? `${label}配置已提交，但磁盘持久性尚未确认。请先查看现有${label}，不要重复生成。` : applied ? `新${label}已保存，生成回执未完整确认，请查看${label}列表，不要重复生成。` : cancelled ? '已取消生成，未应用配置。' : e?.code === 'GENERATION_REVISION_CONFLICT' ? '生成期间档案已变化，本次未应用。' : signal.reason?.code === 'GENERATION_TIMEOUT' ? '生成超时，本次未应用。' : '本次生成未完成，未应用配置；实际收到的用量已保留。' }); }
+      try { await update(owner.id, { ...(!dispatchStarted ? { attempted: false } : {}), status: applied ? 'succeeded' : cancelled ? 'cancelled' : 'failed', stage: 'done', usage, totalTokens: totalOf(usage), createdDefinitionIds, createdCharacterIds, code: committedUncertain ? 'DURABILITY_UNCERTAIN' : opaque(e?.code) ? e.code : 'GENERATION_FAILED', message: committedUncertain ? `${label}配置已提交，但磁盘持久性尚未确认。请先查看现有${label}，不要重复生成。` : applied ? `新${label}已保存，生成回执未完整确认，请查看${label}列表，不要重复生成。` : cancelled ? '已取消生成，未应用配置。' : e?.code === 'GENERATION_REVISION_CONFLICT' ? '生成期间档案已变化，本次未应用。' : signal.reason?.code === 'GENERATION_TIMEOUT' ? '生成超时，本次未应用。' : '本次生成未完成，未应用配置；实际收到的用量已保留。' }); }
       catch { storageError = true; }
     } finally {
       clearTimeout(timer);

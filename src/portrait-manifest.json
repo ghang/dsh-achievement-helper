@@ -1,695 +1,1395 @@
 {
-  "version": 1,
-  "themes": {
-    "explorer": {
-      "file": "explorer.webp",
-      "url": "/dsh-achievement-journal/api/assets/portraits/explorer.webp?version=d0de7f564377",
-      "columns": 4,
-      "rows": 2,
-      "aspect": 1,
-      "characters": [
-        {
-          "id": "builtin:explorer:1",
-          "name": "见习旅人",
-          "icon": "leaf",
-          "column": 0,
-          "row": 0
+  "version": 2,
+  "styles": {
+    "flat": {
+      "label": "清爽扁平",
+      "themes": {
+        "explorer": {
+          "file": "explorer.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/flat/explorer.webp?version=637c439db2a4",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:explorer:1",
+              "name": "见习旅人",
+              "icon": "leaf",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:explorer:2",
+              "name": "初级探险家",
+              "icon": "book",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:explorer:3",
+              "name": "地图学徒",
+              "icon": "compass",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:explorer:4",
+              "name": "荒野向导",
+              "icon": "star",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:explorer:5",
+              "name": "资深探险家",
+              "icon": "flag",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:explorer:6",
+              "name": "遗迹学者",
+              "icon": "book",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:explorer:7",
+              "name": "远征领队",
+              "icon": "medal",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:explorer:8",
+              "name": "传奇探险家",
+              "icon": "compass",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 258886,
+          "sha256": "637c439db2a4c9ca2783846a5e3fd27d71175becc9745f4f3ec6c36dd570f7ae"
         },
-        {
-          "id": "builtin:explorer:2",
-          "name": "初级探险家",
-          "icon": "book",
-          "column": 1,
-          "row": 0
+        "xianxia": {
+          "file": "xianxia.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/flat/xianxia.webp?version=1d2a9949913a",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:xianxia:1",
+              "name": "练气小修",
+              "icon": "leaf",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:xianxia:2",
+              "name": "练气修士",
+              "icon": "lotus",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:xianxia:3",
+              "name": "练气剑修",
+              "icon": "book",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:xianxia:4",
+              "name": "筑基修士",
+              "icon": "sword",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:xianxia:5",
+              "name": "筑基剑修",
+              "icon": "orb",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:xianxia:6",
+              "name": "筑基丹师",
+              "icon": "fox",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:xianxia:7",
+              "name": "结丹真人",
+              "icon": "lotus",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:xianxia:8",
+              "name": "元婴大能",
+              "icon": "dragon",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 235708,
+          "sha256": "1d2a9949913a928bab8755ed61a44695c90f881a4a9d44ba221d4853c8941cfe"
         },
-        {
-          "id": "builtin:explorer:3",
-          "name": "地图学徒",
-          "icon": "compass",
-          "column": 2,
-          "row": 0
+        "cyber": {
+          "file": "cyber.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/flat/cyber.webp?version=1d28651436af",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:cyber:1",
+              "name": "街区新人",
+              "icon": "code",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:cyber:2",
+              "name": "见习网行者",
+              "icon": "leaf",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:cyber:3",
+              "name": "初级技师",
+              "icon": "chat",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:cyber:4",
+              "name": "网络佣兵",
+              "icon": "code",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:cyber:5",
+              "name": "资深网行者",
+              "icon": "robot",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:cyber:6",
+              "name": "义体专家",
+              "icon": "cat",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:cyber:7",
+              "name": "精英黑客",
+              "icon": "orb",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:cyber:8",
+              "name": "都市传说",
+              "icon": "robot",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 276996,
+          "sha256": "1d28651436af5325144811e56080dd5f8e46634d380cc15a2746d6f250202ab8"
         },
-        {
-          "id": "builtin:explorer:4",
-          "name": "荒野向导",
-          "icon": "star",
-          "column": 3,
-          "row": 0
+        "wuxia": {
+          "file": "wuxia.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/flat/wuxia.webp?version=dc106d1effac",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:wuxia:1",
+              "name": "武馆学徒",
+              "icon": "leaf",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:wuxia:2",
+              "name": "江湖新人",
+              "icon": "book",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:wuxia:3",
+              "name": "练武弟子",
+              "icon": "flag",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:wuxia:4",
+              "name": "入门剑客",
+              "icon": "sword",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:wuxia:5",
+              "name": "成名侠客",
+              "icon": "lotus",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:wuxia:6",
+              "name": "门派高手",
+              "icon": "feather",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:wuxia:7",
+              "name": "一代宗师",
+              "icon": "moon",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:wuxia:8",
+              "name": "武林泰斗",
+              "icon": "sword",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 299520,
+          "sha256": "dc106d1efface2bf4e1a3550fbfd20359527c0a02fd8fd34b0bfecfb4208a4c5"
         },
-        {
-          "id": "builtin:explorer:5",
-          "name": "资深探险家",
-          "icon": "flag",
-          "column": 0,
-          "row": 1
+        "fantasy": {
+          "file": "fantasy.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/flat/fantasy.webp?version=b3fd9d366162",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:fantasy:1",
+              "name": "村庄学徒",
+              "icon": "gear",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:fantasy:2",
+              "name": "见习冒险者",
+              "icon": "lantern",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:fantasy:3",
+              "name": "初级法师",
+              "icon": "leaf",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:fantasy:4",
+              "name": "王国骑士",
+              "icon": "leaf",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:fantasy:5",
+              "name": "高阶法师",
+              "icon": "sword",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:fantasy:6",
+              "name": "圣殿骑士",
+              "icon": "orb",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:fantasy:7",
+              "name": "大魔导师",
+              "icon": "book",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:fantasy:8",
+              "name": "传奇英雄",
+              "icon": "dragon",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 285824,
+          "sha256": "b3fd9d366162cdb11781f660d3ded8f3103bdd523db75c5fda1785e87b05ea3f"
         },
-        {
-          "id": "builtin:explorer:6",
-          "name": "遗迹学者",
-          "icon": "book",
-          "column": 1,
-          "row": 1
+        "space": {
+          "file": "space.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/flat/space.webp?version=47fff039c940",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:space:1",
+              "name": "太空学员",
+              "icon": "book",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:space:2",
+              "name": "见习宇航员",
+              "icon": "orb",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:space:3",
+              "name": "轨道技师",
+              "icon": "gear",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:space:4",
+              "name": "星舰领航员",
+              "icon": "compass",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:space:5",
+              "name": "资深宇航员",
+              "icon": "chat",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:space:6",
+              "name": "星舰舰长",
+              "icon": "star",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:space:7",
+              "name": "舰队指挥官",
+              "icon": "ship",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:space:8",
+              "name": "星际元帅",
+              "icon": "ship",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 268570,
+          "sha256": "47fff039c940aa1baf733ca2e6399965bbf069cf4baf6fb34ad2e6f45117e91c"
         },
-        {
-          "id": "builtin:explorer:7",
-          "name": "远征领队",
-          "icon": "medal",
-          "column": 2,
-          "row": 1
+        "ocean": {
+          "file": "ocean.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/flat/ocean.webp?version=86fad76fb420",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:ocean:1",
+              "name": "甲板学徒",
+              "icon": "shell",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:ocean:2",
+              "name": "见习水手",
+              "icon": "chat",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:ocean:3",
+              "name": "潜水员",
+              "icon": "compass",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:ocean:4",
+              "name": "航海士",
+              "icon": "ship",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:ocean:5",
+              "name": "远洋船长",
+              "icon": "orb",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:ocean:6",
+              "name": "深海学者",
+              "icon": "shell",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:ocean:7",
+              "name": "舰队提督",
+              "icon": "medal",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:ocean:8",
+              "name": "海洋领主",
+              "icon": "dragon",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 284676,
+          "sha256": "86fad76fb420b851452e34b238f05763a3cbecdbc991efa04cb4c1502c4c4132"
         },
-        {
-          "id": "builtin:explorer:8",
-          "name": "传奇探险家",
-          "icon": "compass",
-          "column": 3,
-          "row": 1
+        "garden": {
+          "file": "garden.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/flat/garden.webp?version=ba4968ed0442",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:garden:1",
+              "name": "园艺学徒",
+              "icon": "leaf",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:garden:2",
+              "name": "见习花匠",
+              "icon": "chat",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:garden:3",
+              "name": "育苗员",
+              "icon": "flower",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:garden:4",
+              "name": "园艺师",
+              "icon": "flower",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:garden:5",
+              "name": "资深花匠",
+              "icon": "leaf",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:garden:6",
+              "name": "植物学家",
+              "icon": "spark",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:garden:7",
+              "name": "园林大师",
+              "icon": "lantern",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:garden:8",
+              "name": "自然守护者",
+              "icon": "flower",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 253924,
+          "sha256": "ba4968ed044236d855e7d6320e55af169ef9894c76549effa2e696bc8801bf04"
+        },
+        "academy": {
+          "file": "academy.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/flat/academy.webp?version=92455e708a8d",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:academy:1",
+              "name": "预科学徒",
+              "icon": "feather",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:academy:2",
+              "name": "初级学员",
+              "icon": "gear",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:academy:3",
+              "name": "图书助理",
+              "icon": "book",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:academy:4",
+              "name": "正式学者",
+              "icon": "star",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:academy:5",
+              "name": "高阶研究员",
+              "icon": "lantern",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:academy:6",
+              "name": "学科教授",
+              "icon": "feather",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:academy:7",
+              "name": "学院贤者",
+              "icon": "owl",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:academy:8",
+              "name": "首席院长",
+              "icon": "book",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 270550,
+          "sha256": "92455e708a8d8619535941c322be2f1792682776f2d154a7e5f3c208f4068c8a"
+        },
+        "steampunk": {
+          "file": "steampunk.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/flat/steampunk.webp?version=6d6b57afe7d8",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:steampunk:1",
+              "name": "车间学徒",
+              "icon": "lantern",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:steampunk:2",
+              "name": "见习技工",
+              "icon": "robot",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:steampunk:3",
+              "name": "装配技师",
+              "icon": "book",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:steampunk:4",
+              "name": "机械工程师",
+              "icon": "ship",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:steampunk:5",
+              "name": "高级机匠",
+              "icon": "gear",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:steampunk:6",
+              "name": "飞艇舰长",
+              "icon": "flower",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:steampunk:7",
+              "name": "首席工程师",
+              "icon": "gear",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:steampunk:8",
+              "name": "发明大师",
+              "icon": "orb",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 303808,
+          "sha256": "6d6b57afe7d84bd88d39d4474db6c1ae74f3d16b61042d222192ecace8c74b82"
         }
-      ],
-      "width": 1280,
-      "height": 640,
-      "bytes": 380092,
-      "sha256": "d0de7f564377711628f3a909240f26201875762e325330f8333d9f1f0d8d8522"
+      }
     },
-    "xianxia": {
-      "file": "xianxia.webp",
-      "url": "/dsh-achievement-journal/api/assets/portraits/xianxia.webp?version=367c85c27ef6",
-      "columns": 4,
-      "rows": 2,
-      "aspect": 1,
-      "characters": [
-        {
-          "id": "builtin:xianxia:1",
-          "name": "练气小修",
-          "icon": "leaf",
-          "column": 0,
-          "row": 0
+    "pixel": {
+      "label": "微像素",
+      "themes": {
+        "explorer": {
+          "file": "explorer.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/explorer.webp?version=8a706188ff9d",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:explorer:1",
+              "name": "见习旅人",
+              "icon": "leaf",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:explorer:2",
+              "name": "初级探险家",
+              "icon": "book",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:explorer:3",
+              "name": "地图学徒",
+              "icon": "compass",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:explorer:4",
+              "name": "荒野向导",
+              "icon": "star",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:explorer:5",
+              "name": "资深探险家",
+              "icon": "flag",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:explorer:6",
+              "name": "遗迹学者",
+              "icon": "book",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:explorer:7",
+              "name": "远征领队",
+              "icon": "medal",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:explorer:8",
+              "name": "传奇探险家",
+              "icon": "compass",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 316876,
+          "sha256": "8a706188ff9d03b9baf376350aa15b547774f193770d209d4dcd8f355877b80f"
         },
-        {
-          "id": "builtin:xianxia:2",
-          "name": "练气修士",
-          "icon": "lotus",
-          "column": 1,
-          "row": 0
+        "xianxia": {
+          "file": "xianxia.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/xianxia.webp?version=18ee3273bc65",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:xianxia:1",
+              "name": "练气小修",
+              "icon": "leaf",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:xianxia:2",
+              "name": "练气修士",
+              "icon": "lotus",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:xianxia:3",
+              "name": "练气剑修",
+              "icon": "book",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:xianxia:4",
+              "name": "筑基修士",
+              "icon": "sword",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:xianxia:5",
+              "name": "筑基剑修",
+              "icon": "orb",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:xianxia:6",
+              "name": "筑基丹师",
+              "icon": "fox",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:xianxia:7",
+              "name": "结丹真人",
+              "icon": "lotus",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:xianxia:8",
+              "name": "元婴大能",
+              "icon": "dragon",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 352150,
+          "sha256": "18ee3273bc657df7c56c1ee7b58f2663dd4bf60e1f9208af2db172f45544a3f2"
         },
-        {
-          "id": "builtin:xianxia:3",
-          "name": "练气剑修",
-          "icon": "book",
-          "column": 2,
-          "row": 0
+        "cyber": {
+          "file": "cyber.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/cyber.webp?version=c1eddbf9beeb",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:cyber:1",
+              "name": "街区新人",
+              "icon": "code",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:cyber:2",
+              "name": "见习网行者",
+              "icon": "leaf",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:cyber:3",
+              "name": "初级技师",
+              "icon": "chat",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:cyber:4",
+              "name": "网络佣兵",
+              "icon": "code",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:cyber:5",
+              "name": "资深网行者",
+              "icon": "robot",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:cyber:6",
+              "name": "义体专家",
+              "icon": "cat",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:cyber:7",
+              "name": "精英黑客",
+              "icon": "orb",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:cyber:8",
+              "name": "都市传说",
+              "icon": "robot",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 319342,
+          "sha256": "c1eddbf9beeb9cb9def11d75d4a6431791aec615f1ab6e869ba7f77eacdcd000"
         },
-        {
-          "id": "builtin:xianxia:4",
-          "name": "筑基修士",
-          "icon": "sword",
-          "column": 3,
-          "row": 0
+        "wuxia": {
+          "file": "wuxia.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/wuxia.webp?version=dcc7790c87eb",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:wuxia:1",
+              "name": "武馆学徒",
+              "icon": "leaf",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:wuxia:2",
+              "name": "江湖新人",
+              "icon": "book",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:wuxia:3",
+              "name": "练武弟子",
+              "icon": "flag",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:wuxia:4",
+              "name": "入门剑客",
+              "icon": "sword",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:wuxia:5",
+              "name": "成名侠客",
+              "icon": "lotus",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:wuxia:6",
+              "name": "门派高手",
+              "icon": "feather",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:wuxia:7",
+              "name": "一代宗师",
+              "icon": "moon",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:wuxia:8",
+              "name": "武林泰斗",
+              "icon": "sword",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 321000,
+          "sha256": "dcc7790c87ebab4bae4752c534004da78e8528728c63e43f95aed98481240622"
         },
-        {
-          "id": "builtin:xianxia:5",
-          "name": "筑基剑修",
-          "icon": "orb",
-          "column": 0,
-          "row": 1
+        "fantasy": {
+          "file": "fantasy.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/fantasy.webp?version=f140c07789f5",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:fantasy:1",
+              "name": "村庄学徒",
+              "icon": "gear",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:fantasy:2",
+              "name": "见习冒险者",
+              "icon": "lantern",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:fantasy:3",
+              "name": "初级法师",
+              "icon": "leaf",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:fantasy:4",
+              "name": "王国骑士",
+              "icon": "leaf",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:fantasy:5",
+              "name": "高阶法师",
+              "icon": "sword",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:fantasy:6",
+              "name": "圣殿骑士",
+              "icon": "orb",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:fantasy:7",
+              "name": "大魔导师",
+              "icon": "book",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:fantasy:8",
+              "name": "传奇英雄",
+              "icon": "dragon",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 388574,
+          "sha256": "f140c07789f50b8eb9f081ba8f70bdc5e059b475757de4a3ee480eea7588bdd0"
         },
-        {
-          "id": "builtin:xianxia:6",
-          "name": "筑基丹师",
-          "icon": "fox",
-          "column": 1,
-          "row": 1
+        "space": {
+          "file": "space.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/space.webp?version=fa41c46c0082",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:space:1",
+              "name": "太空学员",
+              "icon": "book",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:space:2",
+              "name": "见习宇航员",
+              "icon": "orb",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:space:3",
+              "name": "轨道技师",
+              "icon": "gear",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:space:4",
+              "name": "星舰领航员",
+              "icon": "compass",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:space:5",
+              "name": "资深宇航员",
+              "icon": "chat",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:space:6",
+              "name": "星舰舰长",
+              "icon": "star",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:space:7",
+              "name": "舰队指挥官",
+              "icon": "ship",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:space:8",
+              "name": "星际元帅",
+              "icon": "ship",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 321646,
+          "sha256": "fa41c46c0082487feb6159b23229343d2a4d773995bf5855d74683f0bf280f2b"
         },
-        {
-          "id": "builtin:xianxia:7",
-          "name": "结丹真人",
-          "icon": "lotus",
-          "column": 2,
-          "row": 1
+        "ocean": {
+          "file": "ocean.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/ocean.webp?version=78ae3ec09f78",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:ocean:1",
+              "name": "甲板学徒",
+              "icon": "shell",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:ocean:2",
+              "name": "见习水手",
+              "icon": "chat",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:ocean:3",
+              "name": "潜水员",
+              "icon": "compass",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:ocean:4",
+              "name": "航海士",
+              "icon": "ship",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:ocean:5",
+              "name": "远洋船长",
+              "icon": "orb",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:ocean:6",
+              "name": "深海学者",
+              "icon": "shell",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:ocean:7",
+              "name": "舰队提督",
+              "icon": "medal",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:ocean:8",
+              "name": "海洋领主",
+              "icon": "dragon",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 365626,
+          "sha256": "78ae3ec09f78b80ac265de23560bafbaad38409a60588f48289c8853683b2a41"
         },
-        {
-          "id": "builtin:xianxia:8",
-          "name": "元婴大能",
-          "icon": "dragon",
-          "column": 3,
-          "row": 1
+        "garden": {
+          "file": "garden.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/garden.webp?version=b75ac6098e1d",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:garden:1",
+              "name": "园艺学徒",
+              "icon": "leaf",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:garden:2",
+              "name": "见习花匠",
+              "icon": "chat",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:garden:3",
+              "name": "育苗员",
+              "icon": "flower",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:garden:4",
+              "name": "园艺师",
+              "icon": "flower",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:garden:5",
+              "name": "资深花匠",
+              "icon": "leaf",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:garden:6",
+              "name": "植物学家",
+              "icon": "spark",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:garden:7",
+              "name": "园林大师",
+              "icon": "lantern",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:garden:8",
+              "name": "自然守护者",
+              "icon": "flower",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 340562,
+          "sha256": "b75ac6098e1da8fe0ed87ffb8ec3f690ba6e94ca87b2dfd4ae5b2766916fe70f"
+        },
+        "academy": {
+          "file": "academy.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/academy.webp?version=e0d80fbe0b0f",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:academy:1",
+              "name": "预科学徒",
+              "icon": "feather",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:academy:2",
+              "name": "初级学员",
+              "icon": "gear",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:academy:3",
+              "name": "图书助理",
+              "icon": "book",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:academy:4",
+              "name": "正式学者",
+              "icon": "star",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:academy:5",
+              "name": "高阶研究员",
+              "icon": "lantern",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:academy:6",
+              "name": "学科教授",
+              "icon": "feather",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:academy:7",
+              "name": "学院贤者",
+              "icon": "owl",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:academy:8",
+              "name": "首席院长",
+              "icon": "book",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 319566,
+          "sha256": "e0d80fbe0b0fa8b5b447310bd51c9b463afbf91f38120b88efffadfbb407406c"
+        },
+        "steampunk": {
+          "file": "steampunk.webp",
+          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/steampunk.webp?version=f8cc4c9a3629",
+          "columns": 4,
+          "rows": 2,
+          "aspect": 1,
+          "characters": [
+            {
+              "id": "builtin:steampunk:1",
+              "name": "车间学徒",
+              "icon": "lantern",
+              "column": 0,
+              "row": 0
+            },
+            {
+              "id": "builtin:steampunk:2",
+              "name": "见习技工",
+              "icon": "robot",
+              "column": 1,
+              "row": 0
+            },
+            {
+              "id": "builtin:steampunk:3",
+              "name": "装配技师",
+              "icon": "book",
+              "column": 2,
+              "row": 0
+            },
+            {
+              "id": "builtin:steampunk:4",
+              "name": "机械工程师",
+              "icon": "ship",
+              "column": 3,
+              "row": 0
+            },
+            {
+              "id": "builtin:steampunk:5",
+              "name": "高级机匠",
+              "icon": "gear",
+              "column": 0,
+              "row": 1
+            },
+            {
+              "id": "builtin:steampunk:6",
+              "name": "飞艇舰长",
+              "icon": "flower",
+              "column": 1,
+              "row": 1
+            },
+            {
+              "id": "builtin:steampunk:7",
+              "name": "首席工程师",
+              "icon": "gear",
+              "column": 2,
+              "row": 1
+            },
+            {
+              "id": "builtin:steampunk:8",
+              "name": "发明大师",
+              "icon": "orb",
+              "column": 3,
+              "row": 1
+            }
+          ],
+          "width": 1280,
+          "height": 640,
+          "bytes": 331644,
+          "sha256": "f8cc4c9a36293186f5cb5610a78e9a380ff0eb7d9a394e4967229064523c5891"
         }
-      ],
-      "width": 1280,
-      "height": 640,
-      "bytes": 381696,
-      "sha256": "367c85c27ef67873c266061c5425def53b788671bf248a83926652ced796c11d"
-    },
-    "cyber": {
-      "file": "cyber.webp",
-      "url": "/dsh-achievement-journal/api/assets/portraits/cyber.webp?version=94e65417145b",
-      "columns": 4,
-      "rows": 2,
-      "aspect": 1,
-      "characters": [
-        {
-          "id": "builtin:cyber:1",
-          "name": "街区新人",
-          "icon": "code",
-          "column": 0,
-          "row": 0
-        },
-        {
-          "id": "builtin:cyber:2",
-          "name": "见习网行者",
-          "icon": "leaf",
-          "column": 1,
-          "row": 0
-        },
-        {
-          "id": "builtin:cyber:3",
-          "name": "初级技师",
-          "icon": "chat",
-          "column": 2,
-          "row": 0
-        },
-        {
-          "id": "builtin:cyber:4",
-          "name": "网络佣兵",
-          "icon": "code",
-          "column": 3,
-          "row": 0
-        },
-        {
-          "id": "builtin:cyber:5",
-          "name": "资深网行者",
-          "icon": "robot",
-          "column": 0,
-          "row": 1
-        },
-        {
-          "id": "builtin:cyber:6",
-          "name": "义体专家",
-          "icon": "cat",
-          "column": 1,
-          "row": 1
-        },
-        {
-          "id": "builtin:cyber:7",
-          "name": "精英黑客",
-          "icon": "orb",
-          "column": 2,
-          "row": 1
-        },
-        {
-          "id": "builtin:cyber:8",
-          "name": "都市传说",
-          "icon": "robot",
-          "column": 3,
-          "row": 1
-        }
-      ],
-      "width": 1280,
-      "height": 640,
-      "bytes": 355566,
-      "sha256": "94e65417145bf67463d8c5469774c66312e5ad0ac42e16ba47ddf4ce6cd88847"
-    },
-    "wuxia": {
-      "file": "wuxia.webp",
-      "url": "/dsh-achievement-journal/api/assets/portraits/wuxia.webp?version=2bb74790e0da",
-      "columns": 4,
-      "rows": 2,
-      "aspect": 1,
-      "characters": [
-        {
-          "id": "builtin:wuxia:1",
-          "name": "武馆学徒",
-          "icon": "leaf",
-          "column": 0,
-          "row": 0
-        },
-        {
-          "id": "builtin:wuxia:2",
-          "name": "江湖新人",
-          "icon": "book",
-          "column": 1,
-          "row": 0
-        },
-        {
-          "id": "builtin:wuxia:3",
-          "name": "练武弟子",
-          "icon": "flag",
-          "column": 2,
-          "row": 0
-        },
-        {
-          "id": "builtin:wuxia:4",
-          "name": "入门剑客",
-          "icon": "sword",
-          "column": 3,
-          "row": 0
-        },
-        {
-          "id": "builtin:wuxia:5",
-          "name": "成名侠客",
-          "icon": "lotus",
-          "column": 0,
-          "row": 1
-        },
-        {
-          "id": "builtin:wuxia:6",
-          "name": "门派高手",
-          "icon": "feather",
-          "column": 1,
-          "row": 1
-        },
-        {
-          "id": "builtin:wuxia:7",
-          "name": "一代宗师",
-          "icon": "moon",
-          "column": 2,
-          "row": 1
-        },
-        {
-          "id": "builtin:wuxia:8",
-          "name": "武林泰斗",
-          "icon": "sword",
-          "column": 3,
-          "row": 1
-        }
-      ],
-      "width": 1280,
-      "height": 640,
-      "bytes": 387690,
-      "sha256": "2bb74790e0da73dd74a2d8cf606c091ba3ec8791687b2839eb2db416dfc82363"
-    },
-    "fantasy": {
-      "file": "fantasy.webp",
-      "url": "/dsh-achievement-journal/api/assets/portraits/fantasy.webp?version=5ff0a361ba46",
-      "columns": 4,
-      "rows": 2,
-      "aspect": 1,
-      "characters": [
-        {
-          "id": "builtin:fantasy:1",
-          "name": "村庄学徒",
-          "icon": "gear",
-          "column": 0,
-          "row": 0
-        },
-        {
-          "id": "builtin:fantasy:2",
-          "name": "见习冒险者",
-          "icon": "lantern",
-          "column": 1,
-          "row": 0
-        },
-        {
-          "id": "builtin:fantasy:3",
-          "name": "初级法师",
-          "icon": "leaf",
-          "column": 2,
-          "row": 0
-        },
-        {
-          "id": "builtin:fantasy:4",
-          "name": "王国骑士",
-          "icon": "leaf",
-          "column": 3,
-          "row": 0
-        },
-        {
-          "id": "builtin:fantasy:5",
-          "name": "高阶法师",
-          "icon": "sword",
-          "column": 0,
-          "row": 1
-        },
-        {
-          "id": "builtin:fantasy:6",
-          "name": "圣殿骑士",
-          "icon": "orb",
-          "column": 1,
-          "row": 1
-        },
-        {
-          "id": "builtin:fantasy:7",
-          "name": "大魔导师",
-          "icon": "book",
-          "column": 2,
-          "row": 1
-        },
-        {
-          "id": "builtin:fantasy:8",
-          "name": "传奇英雄",
-          "icon": "dragon",
-          "column": 3,
-          "row": 1
-        }
-      ],
-      "width": 1280,
-      "height": 640,
-      "bytes": 350490,
-      "sha256": "5ff0a361ba4682d08a716e12d6838864f7ccfa2aa2f0a5db08ab760a585454aa"
-    },
-    "space": {
-      "file": "space.webp",
-      "url": "/dsh-achievement-journal/api/assets/portraits/space.webp?version=7697d4c3ea8f",
-      "columns": 4,
-      "rows": 2,
-      "aspect": 1,
-      "characters": [
-        {
-          "id": "builtin:space:1",
-          "name": "太空学员",
-          "icon": "book",
-          "column": 0,
-          "row": 0
-        },
-        {
-          "id": "builtin:space:2",
-          "name": "见习宇航员",
-          "icon": "orb",
-          "column": 1,
-          "row": 0
-        },
-        {
-          "id": "builtin:space:3",
-          "name": "轨道技师",
-          "icon": "gear",
-          "column": 2,
-          "row": 0
-        },
-        {
-          "id": "builtin:space:4",
-          "name": "星舰领航员",
-          "icon": "compass",
-          "column": 3,
-          "row": 0
-        },
-        {
-          "id": "builtin:space:5",
-          "name": "资深宇航员",
-          "icon": "chat",
-          "column": 0,
-          "row": 1
-        },
-        {
-          "id": "builtin:space:6",
-          "name": "星舰舰长",
-          "icon": "star",
-          "column": 1,
-          "row": 1
-        },
-        {
-          "id": "builtin:space:7",
-          "name": "舰队指挥官",
-          "icon": "ship",
-          "column": 2,
-          "row": 1
-        },
-        {
-          "id": "builtin:space:8",
-          "name": "星际元帅",
-          "icon": "ship",
-          "column": 3,
-          "row": 1
-        }
-      ],
-      "width": 1280,
-      "height": 640,
-      "bytes": 364750,
-      "sha256": "7697d4c3ea8fe330bf890052e0c663bf9a969b1f957db3af49c3ef883fa05148"
-    },
-    "ocean": {
-      "file": "ocean.webp",
-      "url": "/dsh-achievement-journal/api/assets/portraits/ocean.webp?version=4b076f719dc2",
-      "columns": 4,
-      "rows": 2,
-      "aspect": 1,
-      "characters": [
-        {
-          "id": "builtin:ocean:1",
-          "name": "甲板学徒",
-          "icon": "shell",
-          "column": 0,
-          "row": 0
-        },
-        {
-          "id": "builtin:ocean:2",
-          "name": "见习水手",
-          "icon": "chat",
-          "column": 1,
-          "row": 0
-        },
-        {
-          "id": "builtin:ocean:3",
-          "name": "潜水员",
-          "icon": "compass",
-          "column": 2,
-          "row": 0
-        },
-        {
-          "id": "builtin:ocean:4",
-          "name": "航海士",
-          "icon": "ship",
-          "column": 3,
-          "row": 0
-        },
-        {
-          "id": "builtin:ocean:5",
-          "name": "远洋船长",
-          "icon": "orb",
-          "column": 0,
-          "row": 1
-        },
-        {
-          "id": "builtin:ocean:6",
-          "name": "深海学者",
-          "icon": "shell",
-          "column": 1,
-          "row": 1
-        },
-        {
-          "id": "builtin:ocean:7",
-          "name": "舰队提督",
-          "icon": "medal",
-          "column": 2,
-          "row": 1
-        },
-        {
-          "id": "builtin:ocean:8",
-          "name": "海洋领主",
-          "icon": "dragon",
-          "column": 3,
-          "row": 1
-        }
-      ],
-      "width": 1024,
-      "height": 512,
-      "bytes": 278390,
-      "sha256": "4b076f719dc29a08fd9d2e38bd46ba5a3e4a76f43f4f963ccfda5bb0a21660b8"
-    },
-    "garden": {
-      "file": "garden.webp",
-      "url": "/dsh-achievement-journal/api/assets/portraits/garden.webp?version=f5e5f33f70fe",
-      "columns": 4,
-      "rows": 2,
-      "aspect": 1,
-      "characters": [
-        {
-          "id": "builtin:garden:1",
-          "name": "园艺学徒",
-          "icon": "leaf",
-          "column": 0,
-          "row": 0
-        },
-        {
-          "id": "builtin:garden:2",
-          "name": "见习花匠",
-          "icon": "chat",
-          "column": 1,
-          "row": 0
-        },
-        {
-          "id": "builtin:garden:3",
-          "name": "育苗员",
-          "icon": "flower",
-          "column": 2,
-          "row": 0
-        },
-        {
-          "id": "builtin:garden:4",
-          "name": "园艺师",
-          "icon": "flower",
-          "column": 3,
-          "row": 0
-        },
-        {
-          "id": "builtin:garden:5",
-          "name": "资深花匠",
-          "icon": "leaf",
-          "column": 0,
-          "row": 1
-        },
-        {
-          "id": "builtin:garden:6",
-          "name": "植物学家",
-          "icon": "spark",
-          "column": 1,
-          "row": 1
-        },
-        {
-          "id": "builtin:garden:7",
-          "name": "园林大师",
-          "icon": "lantern",
-          "column": 2,
-          "row": 1
-        },
-        {
-          "id": "builtin:garden:8",
-          "name": "自然守护者",
-          "icon": "flower",
-          "column": 3,
-          "row": 1
-        }
-      ],
-      "width": 1280,
-      "height": 640,
-      "bytes": 371422,
-      "sha256": "f5e5f33f70fe097aaf22aa85d1d4f2dbd762a81a730759a80c5e934831e5e622"
-    },
-    "academy": {
-      "file": "academy.webp",
-      "url": "/dsh-achievement-journal/api/assets/portraits/academy.webp?version=ac8c8b1907c6",
-      "columns": 4,
-      "rows": 2,
-      "aspect": 1,
-      "characters": [
-        {
-          "id": "builtin:academy:1",
-          "name": "预科学徒",
-          "icon": "feather",
-          "column": 0,
-          "row": 0
-        },
-        {
-          "id": "builtin:academy:2",
-          "name": "初级学员",
-          "icon": "gear",
-          "column": 1,
-          "row": 0
-        },
-        {
-          "id": "builtin:academy:3",
-          "name": "图书助理",
-          "icon": "book",
-          "column": 2,
-          "row": 0
-        },
-        {
-          "id": "builtin:academy:4",
-          "name": "正式学者",
-          "icon": "star",
-          "column": 3,
-          "row": 0
-        },
-        {
-          "id": "builtin:academy:5",
-          "name": "高阶研究员",
-          "icon": "lantern",
-          "column": 0,
-          "row": 1
-        },
-        {
-          "id": "builtin:academy:6",
-          "name": "学科教授",
-          "icon": "feather",
-          "column": 1,
-          "row": 1
-        },
-        {
-          "id": "builtin:academy:7",
-          "name": "学院贤者",
-          "icon": "owl",
-          "column": 2,
-          "row": 1
-        },
-        {
-          "id": "builtin:academy:8",
-          "name": "首席院长",
-          "icon": "book",
-          "column": 3,
-          "row": 1
-        }
-      ],
-      "width": 1280,
-      "height": 640,
-      "bytes": 388660,
-      "sha256": "ac8c8b1907c6f8c59f4d5a4cc8d920d5f69429e16f3c5861475fe02ddf1cec45"
-    },
-    "steampunk": {
-      "file": "steampunk.webp",
-      "url": "/dsh-achievement-journal/api/assets/portraits/steampunk.webp?version=a632d4df827c",
-      "columns": 4,
-      "rows": 2,
-      "aspect": 1,
-      "characters": [
-        {
-          "id": "builtin:steampunk:1",
-          "name": "车间学徒",
-          "icon": "lantern",
-          "column": 0,
-          "row": 0
-        },
-        {
-          "id": "builtin:steampunk:2",
-          "name": "见习技工",
-          "icon": "robot",
-          "column": 1,
-          "row": 0
-        },
-        {
-          "id": "builtin:steampunk:3",
-          "name": "装配技师",
-          "icon": "book",
-          "column": 2,
-          "row": 0
-        },
-        {
-          "id": "builtin:steampunk:4",
-          "name": "机械工程师",
-          "icon": "ship",
-          "column": 3,
-          "row": 0
-        },
-        {
-          "id": "builtin:steampunk:5",
-          "name": "高级机匠",
-          "icon": "gear",
-          "column": 0,
-          "row": 1
-        },
-        {
-          "id": "builtin:steampunk:6",
-          "name": "飞艇舰长",
-          "icon": "flower",
-          "column": 1,
-          "row": 1
-        },
-        {
-          "id": "builtin:steampunk:7",
-          "name": "首席工程师",
-          "icon": "gear",
-          "column": 2,
-          "row": 1
-        },
-        {
-          "id": "builtin:steampunk:8",
-          "name": "发明大师",
-          "icon": "orb",
-          "column": 3,
-          "row": 1
-        }
-      ],
-      "width": 1280,
-      "height": 640,
-      "bytes": 353816,
-      "sha256": "a632d4df827c1ff9292aec81389a7fec4fa24dfa428bd74785bd3bef6ab5a193"
+      }
     }
   }
 }

@@ -11,6 +11,7 @@ const TEMPLATES = ['count', 'distinct', 'first_seen', 'recipe', 'model_report'];
 const RECIPES = ['read_then_change', 'skill_then_change', 'delegate_then_present', 'recall_then_change', 'search_read_change'];
 const LEGACY_THEMES = ['explorer', 'xianxia', 'cyber'];
 const LEGACY_ICONS = ['compass', 'star', 'book', 'flag', 'chat', 'spark', 'leaf', 'code', 'medal'];
+const PORTRAIT_STYLES = ['flat', 'pixel'];
 const KEYED = new Set(KINDS.filter(kind => !['tokens', 'turn_completed'].includes(kind)));
 const HASH = /^[a-f0-9]{64}$/;
 const has = (object, key) => Object.hasOwn(object, key);
@@ -114,7 +115,7 @@ function defaultDefinitions(at) {
   }));
 }
 function fresh(at) {
-  return { schemaVersion: VERSION, revision: 0, createdAt: at, updatedAt: at, preferences: { theme: 'explorer', notifications: 'all', reducedMotion: 'system', frameStyle: 'standard', frameHeight: 64 }, counts: {}, sets: {}, facts: {}, pending: {}, requests: {}, definitions: defaultDefinitions(at), awards: [], timeline: [], equipment: { badges: [], charm: null, character: null }, collection: freshCollection(at), usage: {}, usageMissing: {}, firstFactAt: null, lastFactAt: null };
+  return { schemaVersion: VERSION, revision: 0, createdAt: at, updatedAt: at, preferences: { theme: 'explorer', portraitStyle: 'flat', notifications: 'all', reducedMotion: 'system', frameStyle: 'standard', frameHeight: 64 }, counts: {}, sets: {}, facts: {}, pending: {}, requests: {}, definitions: defaultDefinitions(at), awards: [], timeline: [], equipment: { badges: [], charm: null, character: null }, collection: freshCollection(at), usage: {}, usageMissing: {}, firstFactAt: null, lastFactAt: null };
 }
 function migrateLegacy(state) {
   const next = clone(state); next.schemaVersion = VERSION;
@@ -137,9 +138,10 @@ function validateStored(state) {
     const legacy = state.schemaVersion === 1, themeIds = legacy ? LEGACY_THEMES : THEMES, iconIds = legacy ? LEGACY_ICONS : ICONS;
     fields(state, ['schemaVersion', 'revision', 'createdAt', 'updatedAt', 'preferences', 'counts', 'sets', 'facts', 'pending', 'requests', 'definitions', 'awards', 'timeline', 'equipment', 'usage', 'usageMissing', 'firstFactAt', 'lastFactAt', ...legacy ? [] : ['collection'], ...state.debug === true ? ['debug'] : []], 'stored state');
     integer(state.revision, 'revision'); integer(state.createdAt, 'createdAt'); integer(state.updatedAt, 'updatedAt');
-    fields(state.preferences, ['theme', 'notifications', 'reducedMotion', ...legacy ? [] : ['frameStyle', 'frameHeight']], 'preferences');
+    fields(state.preferences, ['theme', 'notifications', 'reducedMotion', ...legacy ? [] : ['frameStyle', 'frameHeight', 'portraitStyle']], 'preferences');
     option(state.preferences.theme, themeIds, 'theme'); option(state.preferences.notifications, ['all', 'unlocks', 'off'], 'notifications'); option(state.preferences.reducedMotion, ['system', 'reduce', 'full'], 'reducedMotion');
     if (!legacy) { option(state.preferences.frameStyle, FRAME_STYLES.map(style => style.id), 'frame style'); integer(state.preferences.frameHeight, 'frame height', COLLECTION_LIMITS.frameHeightMin); if (state.preferences.frameHeight > COLLECTION_LIMITS.frameHeightMax) fail('CORRUPT_STATE', 'Frame height is out of bounds.'); }
+    if (!legacy && has(state.preferences, 'portraitStyle')) option(state.preferences.portraitStyle, PORTRAIT_STYLES, 'portrait style');
     for (const [kind, value] of Object.entries(object(state.counts, 'counts'))) { option(kind, KINDS, 'metric'); integer(value, 'count'); }
     for (const [kind, keys] of Object.entries(object(state.sets, 'sets'))) { option(kind, KINDS, 'metric'); assertHashMap(keys, 'distinct keys', value => { if (value !== true) fail('CORRUPT_STATE', 'Invalid distinct key.'); }); }
     assertHashMap(state.facts, 'fact identities', value => { if (typeof value !== 'string' || !HASH.test(value)) fail('CORRUPT_STATE', 'Invalid fact fingerprint.'); });
@@ -263,7 +265,7 @@ function publicSnapshot(state, notifications, storageStatus) {
   const totals = { tokens: count('tokens'), knownTokens, turns: count('turn_completed'), fileReads: count('file_read'), fileChanges: count('file_changed'), formats: distinct('format_read'), skills: distinct('skill_loaded'), delegations: count('delegate_completed'), presentations: count('file_presented'), routes: distinct('route_used'), recalls: count('recall_used'), byMetric: Object.fromEntries(KINDS.map(kind => [kind, count(kind)])) };
   totals.usage = Object.fromEntries(USAGE_FIELDS.map(key => [key, key === 'totalTokens' ? totals.tokens : state.usageMissing[key] ? null : state.usage[key] ?? (knownTokens === 0 && !pendingByMetric.tokens ? 0 : null)]));
   const definitions = state.definitions.map(d => ({ id: d.id, title: d.title, description: d.description, icon: d.icon, category: d.category, source: d.source, configuredBy: d.configuredBy, rule: clone(d.rule), scope: d.scope, ...(d.workspaceKey ? { workspaceKey: d.workspaceKey } : {}), baseline: d.baseline, baselineAt: d.baselineAt, hidden: d.hidden, revision: d.revision, status: d.status, progress: (d.frozenIncomplete || Object.keys(d.unknown).length) && d.value < d.rule.target ? null : d.value, knownProgress: d.value, target: d.rule.target, progressRatio: Math.min(1, d.value / d.rule.target), incomplete: d.frozenIncomplete || Object.keys(d.unknown).length > 0, ...(d.unlockedAt !== undefined ? { unlockedAt: d.unlockedAt } : {}), themes: clone(d.themes) }));
-  return clone({ ...state.debug === true ? { debug: true } : {}, revision: state.revision, createdAt: state.createdAt, updatedAt: state.updatedAt, preferences: state.preferences, totals, level: levelFor(knownTokens, !!pendingByMetric.tokens), definitions, awards: state.awards, timeline: [...state.timeline].sort((a, b) => b.at - a.at || b.id.localeCompare(a.id)), notifications, equipment: state.equipment, collection: presentCollection(state.collection), coverage: { mode: 'observed_facts', startedAt: state.createdAt, firstFactAt: state.firstFactAt, lastFactAt: state.lastFactAt, pendingFacts: Object.keys(state.pending).length, pendingByMetric, complete: Object.keys(state.pending).length === 0, historyComplete: false, scope: 'collector_supplied', note: 'Coverage includes only facts actually supplied by the collector; account-wide history is not implied.' }, storage: { schemaVersion: VERSION, status: storageStatus, atomic: true, writer: 'exclusive_lock_single_process', limits: JOURNAL_LIMITS, usage: { facts: Object.keys(state.facts).length, pendingFacts: Object.keys(state.pending).length, requests: Object.keys(state.requests).length, definitions: state.definitions.length, awards: state.awards.length, characters: state.collection.characters.length, draws: state.collection.draws.length } } });
+  return clone({ ...state.debug === true ? { debug: true } : {}, revision: state.revision, createdAt: state.createdAt, updatedAt: state.updatedAt, preferences: { portraitStyle: 'flat', ...state.preferences }, totals, level: levelFor(knownTokens, !!pendingByMetric.tokens), definitions, awards: state.awards, timeline: [...state.timeline].sort((a, b) => b.at - a.at || b.id.localeCompare(a.id)), notifications, equipment: state.equipment, collection: presentCollection(state.collection), coverage: { mode: 'observed_facts', startedAt: state.createdAt, firstFactAt: state.firstFactAt, lastFactAt: state.lastFactAt, pendingFacts: Object.keys(state.pending).length, pendingByMetric, complete: Object.keys(state.pending).length === 0, historyComplete: false, scope: 'collector_supplied', note: 'Coverage includes only facts actually supplied by the collector; account-wide history is not implied.' }, storage: { schemaVersion: VERSION, status: storageStatus, atomic: true, writer: 'exclusive_lock_single_process', limits: JOURNAL_LIMITS, usage: { facts: Object.keys(state.facts).length, pendingFacts: Object.keys(state.pending).length, requests: Object.keys(state.requests).length, definitions: state.definitions.length, awards: state.awards.length, characters: state.collection.characters.length, draws: state.collection.draws.length } } });
 }
 async function atomicWrite(file, data) {
   const serialized = JSON.stringify(data);
@@ -479,10 +481,11 @@ export async function createJournal({ file, now = Date.now, randomInt, allowDebu
       });
     },
     preferences(input) {
-      try { fields(input, ['theme', 'notifications', 'reducedMotion', 'frameStyle', 'frameHeight'], 'preferences'); input = clone(input); } catch (error) { return Promise.reject(error); }
+      try { fields(input, ['theme', 'portraitStyle', 'notifications', 'reducedMotion', 'frameStyle', 'frameHeight'], 'preferences'); input = clone(input); } catch (error) { return Promise.reject(error); }
       return mutate(next => {
-        const value = { ...next.preferences };
+        const value = { portraitStyle: 'flat', ...next.preferences };
         if (input.theme !== undefined) value.theme = option(input.theme, THEMES, 'theme');
+        if (input.portraitStyle !== undefined) value.portraitStyle = option(input.portraitStyle, PORTRAIT_STYLES, 'portrait style');
         if (input.notifications !== undefined) value.notifications = option(input.notifications, ['all', 'unlocks', 'off'], 'notifications');
         if (input.reducedMotion !== undefined) value.reducedMotion = option(input.reducedMotion, ['system', 'reduce', 'full'], 'reducedMotion');
         if (input.frameStyle !== undefined) { const preset = FRAME_STYLES.find(style => style.id === input.frameStyle); if (!preset) fail('INVALID_INPUT', 'Unsupported frame style.'); value.frameStyle = preset.id; value.frameHeight = preset.height; }

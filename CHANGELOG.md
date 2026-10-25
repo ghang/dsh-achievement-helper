@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0-rc.4
+
+Add independent flat/pixel appearance selection for all ten themes, with twenty
+transparent atlases representing the same eighty character identities. Theme
+appropriate effects increase with rarity; uploaded art retains precedence.
+Preserve existing archives without a read-time rewrite and isolate appearance
+changes in debug copies. Canceling auxiliary generation before dispatch no
+longer creates a spurious unknown-usage receipt. Keep the four model tool
+schemas unchanged. Downgrading after saving the new preference requires the
+matching complete plugin-storage backup.
+
 ## 0.2.0-rc.3
 
 Add an exact achievement generation count (1–6, default 3) and deletion of

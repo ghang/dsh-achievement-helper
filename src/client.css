@@ -30,9 +30,9 @@
 .daj-eyebrow{color:var(--daj-muted);font-size:10px;letter-spacing:1.7px;line-height:1.6}
 .daj-backdrop{position:fixed;inset:0;background:#13223554;backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:clamp(10px,1.5vw,20px)}
 .daj-center{width:min(1080px,100%);height:min(790px,calc(100dvh - 32px));max-height:100%;font-size:clamp(11px,.9em,13px);background:var(--daj-bg);border:1px solid var(--daj-line);border-radius:14px;box-shadow:0 24px 100px #0a192f33;overflow:hidden;display:flex;flex-direction:column;outline:0;container:achievement-center / inline-size}
-.daj-center-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:none;padding:11px 20px;background:var(--daj-panel);border-bottom:1px solid var(--daj-line)}
+.daj-center-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;flex:none;padding:11px 20px;background:var(--daj-panel);border-bottom:1px solid var(--daj-line)}
 .daj-brand{display:flex;align-items:center;gap:10px;min-width:0}.daj-brand>svg{color:var(--daj-accent)}.daj-brand strong{font-size:13px;white-space:nowrap}.daj-brand>span{color:var(--daj-muted);font-size:11px}
-.daj-header-actions{display:flex;align-items:center;gap:8px}.daj-theme-select{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--daj-muted)}
+.daj-header-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;min-width:0;max-width:100%;margin-left:auto}.daj-header-actions>.daj-icon-button,.daj-brand>svg{flex:none}.daj-theme-select,.daj-portrait-style-select{display:flex;align-items:center;gap:6px;min-width:0;font-size:11px;color:var(--daj-muted);white-space:nowrap}.daj-theme-select select,.daj-portrait-style-select select{min-width:0}.daj-portrait-style-select select{max-width:126px}
 .daj-surface select{border:1px solid var(--daj-line);border-radius:7px;color:var(--daj-text);background:var(--daj-panel);padding:5px 8px;min-height:30px;max-width:180px}
 .daj-tabs{display:flex;align-items:stretch;gap:24px;padding:0 20px;min-height:43px;background:var(--daj-panel);border-bottom:1px solid var(--daj-line);flex:none;overflow-x:auto}
 .daj-tabs button{padding:0 1px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--daj-muted);white-space:nowrap;font-size:12px}
@@ -160,8 +160,8 @@
  .daj-error-banner,.daj-coverage-note{margin-left:15px!important;margin-right:15px!important}
 }
 @container achievement-center (max-width:580px){
- .daj-center-header{padding:9px 12px}.daj-header-actions{gap:2px}.daj-theme-select>span{display:none}
- .daj-theme-select select{max-width:90px;font-size:11px}.daj-tabs{padding:0 13px;gap:19px;min-height:40px}.daj-tabs button{font-size:11px}
+ .daj-center-header{padding:9px 12px}.daj-header-actions{gap:2px}.daj-theme-select>span,.daj-portrait-style-select>span{display:none}
+ .daj-theme-select select{max-width:90px;font-size:11px}.daj-portrait-style-select select{max-width:110px;font-size:11px}.daj-tabs{padding:0 13px;gap:19px;min-height:40px}.daj-tabs button{font-size:11px}
  .daj-page-heading{gap:10px;margin-bottom:14px}.daj-page-heading h2{font-size:17px}.daj-page-heading>.daj-button{font-size:10px;padding:5px 7px;gap:3px}
  .daj-hero{padding:16px 14px;gap:12px;align-items:flex-start;min-height:132px}.daj-avatar{width:43px;height:43px;border-radius:14px;margin-top:6px}
  .daj-hero h3{font-size:16px}.daj-level{margin:5px 0 0;display:table;font-size:9px}.daj-hero p{font-size:10px;margin:6px 0}
@@ -179,7 +179,7 @@
  .daj-error-banner,.daj-coverage-note{margin-left:13px!important;margin-right:13px!important;font-size:10px}
  .daj-model-footer{align-items:flex-start}.daj-brand strong{font-size:12px}
 }
-@container achievement-center (max-width:400px){.daj-badge-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.daj-theme-select select{max-width:78px}.daj-brand{gap:6px}}
+@container achievement-center (max-width:400px){.daj-badge-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.daj-theme-select select{max-width:78px}.daj-portrait-style-select select{max-width:106px}.daj-brand{gap:6px}.daj-center-header{flex-wrap:wrap;gap:6px}.daj-header-actions{flex-basis:100%;gap:5px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}}
 @media(max-width:590px){.daj-backdrop{padding:0}.daj-center{border-radius:0;border:0;width:100%;height:100dvh;max-height:none}.daj-feedback{right:12px;bottom:14px;max-width:calc(100vw - 24px)}}
 @media(max-height:640px) and (min-width:591px){.daj-backdrop{padding:10px}.daj-center{height:calc(100dvh - 20px)}.daj-center-header{padding-top:8px;padding-bottom:8px}.daj-tabs{min-height:38px}}
 .daj-surface[data-daj-theme=wuxia]{--daj-bg:#f3efe6;--daj-panel:#fffdf7;--daj-text:#4c4037;--daj-muted:#8d8171;--daj-line:#e4dacc;--daj-accent:#835c46;--daj-soft:#ede3d4;--daj-gold:#ba9259}
@@ -229,6 +229,7 @@
 @container achievement-center (max-width:580px){.daj-draw-hero{align-items:flex-start;flex-direction:column;gap:13px;padding:15px}.daj-draw-points{display:grid;grid-template-columns:auto auto;gap:0 13px;align-items:center}.daj-draw-points>strong{font-size:26px}.daj-draw-points>p{grid-column:1/-1}.daj-draw-controls{width:100%;grid-template-columns:110px 1fr}.daj-draw-result-grid{gap:6px}.daj-draw-result{padding:8px 3px}.daj-draw-result .daj-character-art{--daj-character-size:50px!important}.daj-draw-result>strong{font-size:9px}.daj-character-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.daj-frame-controls{flex-wrap:wrap;gap:9px}.daj-frame-controls>.daj-button{margin-left:auto}.daj-frame-presets{grid-template-columns:1fr}.daj-frame-preset{display:grid;grid-template-columns:75px 1fr;align-items:center;gap:8px}.daj-frame-preset>span{margin:0}.daj-frame-preset .daj-account-frame{max-width:260px}.daj-character-theme-filter{margin-left:0}.daj-tabs{gap:17px}.daj-character-form-preview{gap:12px}}
 .daj-character-art{width:calc(var(--daj-character-size) * var(--daj-character-aspect,.875))}
 .daj-character-portrait{display:block;position:relative;z-index:1;width:100%;height:100%;background-repeat:no-repeat;flex:none}
+.daj-character-art[data-portrait-style=pixel]>.daj-character-portrait{image-rendering:crisp-edges;image-rendering:pixelated}
 .daj-draw-result>.daj-button{font-size:10px;padding:5px 6px;min-height:28px;width:100%;margin-top:5px}
 .daj-frame-change{display:inline-block;font-size:8px!important;color:var(--daj-accent);font-weight:400;vertical-align:middle;margin-left:6px;border-bottom:1px dotted currentColor}
 .daj-frame-debug-label{position:absolute;right:4px;top:3px;font:500 8px/1.4 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;background:#f8dfb5;color:#714910;border:1px solid #d3ac70;border-radius:3px;padding:0 3px;z-index:3}

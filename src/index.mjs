@@ -88,7 +88,7 @@ async function recoverDeadWriter(file) {
 function unavailableJournal() {
   const failure = () => Promise.reject(error('成就档案暂不可用，原数据已保留。', 503, 'JOURNAL_STORAGE'));
   return { snapshot: () => ({ revision: 0, createdAt: null, updatedAt: null,
-    preferences: { theme: 'xianxia', notifications: 'all', reducedMotion: 'system', frameStyle: 'standard', frameHeight: 64 }, totals: {},
+    preferences: { theme: 'xianxia', portraitStyle: 'flat', notifications: 'all', reducedMotion: 'system', frameStyle: 'standard', frameHeight: 64 }, totals: {},
     level: { number: 1, current: null, next: null, progress: null, incomplete: true },
     definitions: [], awards: [], timeline: [], notifications: [], equipment: { badges: [], charm: null, character: null },
     collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [], owned: [], draws: [] },

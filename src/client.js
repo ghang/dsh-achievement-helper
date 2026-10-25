@@ -50,6 +50,7 @@ window.__ModuleLoader__.load({
     Object.keys(THEMES).forEach(function (id) { THEMES[id].tabs[2] = '自定义生成'; THEMES[id].tabs = THEMES[id].tabs.concat('角色收藏'); });
     const TAB_IDS = ['overview', 'collection', 'model', 'history', 'characters'];
     const RARITIES = ['N', 'R', 'SR', 'SSR'];
+    const PORTRAIT_STYLES = { flat: '清爽扁平', pixel: '微像素' };
     const ANIMATION_NAMES = { none: '静止', float: '轻浮动', pulse: '呼吸', orbit: '环游', spark: '星光' };
     const ICON_NAMES = { compass: '罗盘', star: '星光', book: '书卷', flag: '旗帜', chat: '对话', spark: '灵光', leaf: '叶片', code: '代码', medal: '勋章', sword: '剑', lotus: '莲花', orb: '灵球', fox: '狐狸', robot: '机器人', ship: '飞船', dragon: '龙', moon: '月亮', shell: '贝壳', flower: '花朵', feather: '羽毛', gear: '齿轮', lantern: '灯笼', cat: '猫', owl: '猫头鹰' };
     const CHARM_NAMES = { compass: '随行罗盘', star: '小小星光', leaf: '一叶闲心' };
@@ -185,6 +186,7 @@ window.__ModuleLoader__.load({
         : { year: 'numeric', month: '2-digit', day: '2-digit' });
     }
     function themeId(data) { return THEMES[data && data.preferences && data.preferences.theme] ? data.preferences.theme : 'explorer'; }
+    function portraitStyle(data) { return data && data.preferences && data.preferences.portraitStyle === 'pixel' ? 'pixel' : 'flat'; }
     function theme(data) { return THEMES[themeId(data)]; }
     function presentation(item, data) {
       if (concealed(item, data)) return { title: '尚未揭晓', description: '某个平常的瞬间，会留下一枚意外的印记。' };
@@ -222,9 +224,12 @@ window.__ModuleLoader__.load({
       const limit = catalog && catalog.collection && catalog.collection.limits && catalog.collection.limits.customCharacters;
       return finite(limit) && characters(data).filter(function (item) { return item.source !== 'builtin'; }).length >= limit;
     }
-    function portraitFor(character) {
-      const atlas = PORTRAITS && typeof PORTRAITS === 'object' && PORTRAITS.themes && PORTRAITS.themes[character.theme];
-      if (!atlas || !/^\/dsh-achievement-journal\/api\/assets\/portraits\/[a-z0-9_-]+\.webp(?:\?version=[a-f0-9]+)?$/.test(atlas.url || '') || !Number.isInteger(atlas.columns) || !Number.isInteger(atlas.rows) || atlas.columns < 1 || atlas.rows < 1) return null;
+    function portraitFor(character, style) {
+      const manifest = PORTRAITS && typeof PORTRAITS === 'object' ? PORTRAITS : {};
+      const family = manifest.styles && manifest.styles[style];
+      const atlas = manifest.styles ? family && family.themes && family.themes[character.theme] : style === 'flat' && manifest.themes && manifest.themes[character.theme];
+      const url = atlas && /^\/dsh-achievement-journal\/api\/assets\/portraits\/(?:(flat|pixel)\/)?([a-z0-9_-]+)\.webp(?:\?version=[a-f0-9]+)?$/.exec(atlas.url || '');
+      if (!atlas || !url || url[2] !== character.theme || (manifest.styles ? url[1] !== style : Boolean(url[1] && url[1] !== style)) || !Number.isInteger(atlas.columns) || !Number.isInteger(atlas.rows) || atlas.columns < 1 || atlas.rows < 1) return null;
       const cell = array(atlas.characters).find(function (item) { return item.id === character.id; }) || array(atlas.characters).find(function (item) { return item.icon === character.icon; }) || array(atlas.characters)[0];
       if (!cell || !Number.isInteger(cell.column) || !Number.isInteger(cell.row) || cell.column < 0 || cell.row < 0 || cell.column >= atlas.columns || cell.row >= atlas.rows) return null;
       return { url: atlas.url, columns: atlas.columns, rows: atlas.rows, column: cell.column, row: cell.row, aspect: finite(atlas.aspect) && atlas.aspect > 0 ? atlas.aspect : .875 };
@@ -607,7 +612,7 @@ window.__ModuleLoader__.load({
       const data = snapshot.data;
       if (!data) return Promise.resolve(false);
       if (patch.theme && (pendingDrawId || snapshot.drawPending || snapshot.drawRetry)) { publish({ actionError: '请先重试并确认这次十连结果，再切换主题。' }); return Promise.resolve(false); }
-      return mutate('/preferences', Object.assign({}, data.preferences, patch));
+      return mutate('/preferences', patch);
     }
     function requestId() {
       return window.crypto && typeof window.crypto.randomUUID === 'function'
@@ -704,23 +709,26 @@ window.__ModuleLoader__.load({
       const character = props.character || { name: '尚未佩戴角色', icon: 'star', animation: 'none' };
       const reduce = props.reduce;
       const art = validArt(character.art) ? character.art : null;
-      const portrait = portraitFor(character);
+      const style = portraitStyle(props.data);
+      const portrait = art ? null : portraitFor(character, style);
+      const portraitUrl = portrait && portrait.url;
       const [failedPortrait, setFailedPortrait] = useState(null);
-      const [still, setStill] = useState(function () { return art && staticArtCache.get(art) || null; });
+      const [still, setStill] = useState(function () { const cached = art && staticArtCache.get(art); return cached ? { art: art, url: cached } : null; });
+      const stillArt = still && still.art === art ? still.url : null;
       useEffect(function () {
         let live = true;
         setFailedPortrait(null);
-        if (!portrait || typeof window.Image !== 'function') return;
+        if (!portraitUrl || typeof window.Image !== 'function') return;
         const picture = new window.Image();
-        picture.onerror = function () { if (live) setFailedPortrait(portrait.url); };
-        picture.src = portrait.url;
+        picture.onerror = function () { if (live) setFailedPortrait(portraitUrl); };
+        picture.src = portraitUrl;
         return function () { live = false; picture.onerror = null; picture.onload = null; };
-      }, [portrait && portrait.url]);
+      }, [portraitUrl]);
       useEffect(function () {
         let live = true;
         if (!reduce || !art) { setStill(null); return; }
         const cached = staticArtCache.get(art);
-        if (cached) { setStill(cached); return; }
+        if (cached) { setStill({ art: art, url: cached }); return; }
         setStill(null);
         if (typeof window.Image !== 'function') return;
         const picture = new window.Image();
@@ -734,7 +742,7 @@ window.__ModuleLoader__.load({
             const value = canvas.toDataURL('image/png');
             staticArtCache.set(art, value);
             if (staticArtCache.size > 32) staticArtCache.delete(staticArtCache.keys().next().value);
-            setStill(value);
+            setStill({ art: art, url: value });
           } catch (_error) { /* The vector portrait remains a motion-free fallback. */ }
         };
         picture.src = art;
@@ -743,8 +751,8 @@ window.__ModuleLoader__.load({
       const colors = THEMES[character.theme] && THEMES[character.theme].art || { dark: '#477a70', light: '#d8e7cf', gold: '#c3a35d' };
       const ears = ['fox', 'cat', 'dragon'].includes(character.icon);
       const robot = character.icon === 'robot';
-      return h('span', { className: 'daj-character-art ' + (props.className || ''), 'data-animation': reduce ? 'none' : character.animation || 'none', style: { '--daj-character-size': (props.size || 100) + 'px', '--daj-character-aspect': portrait && portrait.url !== failedPortrait ? portrait.aspect : .875, '--daj-character-accent': colors.dark, '--daj-character-light': colors.light } },
-        art && (!reduce || still) ? h('img', { src: reduce ? still : art, alt: '', draggable: false }) : portrait && portrait.url !== failedPortrait ? h('span', { className: 'daj-character-portrait', 'aria-hidden': true, style: { backgroundImage: 'url("' + portrait.url + '")', backgroundSize: portrait.columns * 100 + '% ' + portrait.rows * 100 + '%', backgroundPosition: (portrait.columns === 1 ? 0 : portrait.column / (portrait.columns - 1) * 100) + '% ' + (portrait.rows === 1 ? 0 : portrait.row / (portrait.rows - 1) * 100) + '%' } }) : h('svg', { viewBox: '0 0 140 160', 'aria-hidden': true },
+      return h('span', { className: 'daj-character-art ' + (props.className || ''), 'data-portrait-style': art ? 'custom' : style, 'data-animation': reduce ? 'none' : character.animation || 'none', style: { '--daj-character-size': (props.size || 100) + 'px', '--daj-character-aspect': portrait && portrait.url !== failedPortrait ? portrait.aspect : .875, '--daj-character-accent': colors.dark, '--daj-character-light': colors.light } },
+        art && (!reduce || stillArt) ? h('img', { src: reduce ? stillArt : art, alt: '', draggable: false }) : portrait && portrait.url !== failedPortrait ? h('span', { className: 'daj-character-portrait', 'aria-hidden': true, style: { backgroundImage: 'url("' + portrait.url + '")', backgroundSize: portrait.columns * 100 + '% ' + portrait.rows * 100 + '%', backgroundPosition: (portrait.columns === 1 ? 0 : portrait.column / (portrait.columns - 1) * 100) + '% ' + (portrait.rows === 1 ? 0 : portrait.row / (portrait.rows - 1) * 100) + '%' } }) : h('svg', { viewBox: '0 0 140 160', 'aria-hidden': true },
           h('ellipse', { cx: 70, cy: 145, rx: 41, ry: 8, fill: colors.dark, opacity: .12 }),
           h('circle', { cx: 70, cy: 70, r: 57, fill: colors.light, opacity: .48 }),
           h('path', { d: 'M30 141v-25c0-27 80-27 80 0v25Z', fill: colors.dark }),
@@ -766,7 +774,7 @@ window.__ModuleLoader__.load({
       const debugging = snapshot.debugActive;
       return h('div', { className: 'daj-account-frame daj-frame-' + settings.frameStyle + (short ? ' daj-frame-short' : '') + (debugging ? ' daj-frame-debug' : ''), style: { height: props.fit ? '100%' : settings.frameHeight + 'px' }, 'data-daj-reduce': reducedMotion(data) ? 'true' : 'false' },
         debugging ? h('b', { className: 'daj-frame-debug-label' }, '调试') : null,
-        character ? h(CharacterArt, { character: character, reduce: reducedMotion(data), size: Math.max(23, Math.min(145, settings.frameHeight - 6)), className: 'daj-frame-character' }) : h('span', { className: 'daj-frame-empty-icon' }, h(Icon, { name: 'medal', size: short ? 18 : 28 })),
+        character ? h(CharacterArt, { character: character, data: data, reduce: reducedMotion(data), size: Math.max(23, Math.min(145, settings.frameHeight - 6)), className: 'daj-frame-character' }) : h('span', { className: 'daj-frame-empty-icon' }, h(Icon, { name: 'medal', size: short ? 18 : 28 })),
         h('span', { className: 'daj-frame-copy' }, h('strong', { title: character ? character.name : '成就手记' }, character ? character.name : '成就手记', props.interactive && character ? h('small', { className: 'daj-frame-change' }, '更换') : null),
           h('span', { className: 'daj-profile-level' }, data ? 'Lv.' + (data.level.isLowerBound || data.level.incomplete ? '≥' : '') + exact(data.level.number) + (short ? '' : ' · ' + allAwards(data).length + ' 枚成就') : '正在连接'),
           h('span', { className: 'daj-profile-badges' }, badges.length ? badges.map(function (item) { return h('span', { key: item.id, title: presentation(item, data).title }, h(Badge, { item: item, theme: themeId(data), size: 18 })); }) : !short ? h('small', null, character ? THEMES[character.theme] && THEMES[character.theme].role || '旅途同伴' : '等待第一枚纪念') : null)),
@@ -860,7 +868,7 @@ window.__ModuleLoader__.load({
       const disabled = props.busy || uploading || full;
       return h('form', { id: 'daj-character-editor', className: 'daj-card daj-section daj-character-editor', onSubmit: save },
         h('div', { className: 'daj-section-heading' }, h('h3', null, item ? '编辑角色外观' : '手工创作角色'), item ? h(Button, { className: 'daj-text-button', onClick: props.clear }, '新建角色') : null),
-        h('div', { className: 'daj-character-form-preview' }, h(CharacterArt, { character: Object.assign({}, form, { name: form.name || '角色预览', theme: themeId(props.data) }), reduce: reducedMotion(props.data), size: 112 }), h('span', null, h('strong', null, form.name || '角色预览'), h('small', null, theme(props.data).name + ' · 外观预览'))),
+        h('div', { className: 'daj-character-form-preview' }, h(CharacterArt, { character: Object.assign({}, form, { name: form.name || '角色预览', theme: themeId(props.data) }), data: props.data, reduce: reducedMotion(props.data), size: 112 }), h('span', null, h('strong', null, form.name || '角色预览'), h('small', null, theme(props.data).name + ' · 外观预览'))),
         h('label', null, h('span', { className: 'daj-field-label' }, '角色名字'), h('input', { id: 'daj-character-name', className: 'daj-direction-input', value: form.name, maxLength: 60, required: true, disabled: disabled, onChange: function (event) { change('name', event.target.value); } })),
         h('label', null, h('span', { className: 'daj-field-label' }, '一句介绍 · 可选'), h('input', { id: 'daj-character-description', className: 'daj-direction-input', value: form.description, maxLength: 240, disabled: disabled, onChange: function (event) { change('description', event.target.value); } })),
         h('div', { className: 'daj-character-form-grid' },
@@ -910,7 +918,7 @@ window.__ModuleLoader__.load({
         receipt ? h('section', { className: 'daj-card daj-section daj-draw-results', 'aria-label': '十连抽取结果' }, h('div', { className: 'daj-section-heading' }, h('h3', null, '最近一次十连'), h('small', { className: 'daj-muted' }, (THEMES[receipt.theme] && THEMES[receipt.theme].name || '') + ' · ' + date(receipt.at, true))),
           h('div', { className: 'daj-draw-result-grid' }, array(receipt.results).map(function (result, index) {
             const item = characterFor(data, result.id), worn = data.equipment && data.equipment.character === result.id;
-            return h('div', { key: index, className: 'daj-draw-result daj-rarity-' + result.rarity }, h(CharacterArt, { character: item, reduce: reducedMotion(data), size: 78 }), h('strong', null, item ? item.name : '角色记录同步中'), h('small', null, result.rarity + ' · ' + (result.isNew ? '新角色' : '重复角色')),
+            return h('div', { key: index, className: 'daj-draw-result daj-rarity-' + result.rarity }, h(CharacterArt, { character: item, data: data, reduce: reducedMotion(data), size: 78 }), h('strong', null, item ? item.name : '角色记录同步中'), h('small', null, result.rarity + ' · ' + (result.isNew ? '新角色' : '重复角色')),
               h(Button, { className: worn ? '' : 'daj-primary', disabled: state.busy || !item || !ownedCharacter(data, result.id) || worn, 'aria-label': '佩戴到成就框 ' + (item ? item.name : result.id), onClick: function () { void mutate('/equip', { id: result.id, slot: 'character', equipped: true }); } }, worn ? '已佩戴到成就框' : '佩戴到成就框'));
           }))) : null,
         mode === 'create' ? h('div', { className: 'daj-character-studio' }, h(CharacterGenerator, { data: data, state: state, view: view }), h(CharacterEditor, { key: editing && editing.id || 'new', item: editing, data: data, catalog: state.catalog, busy: state.busy, clear: function () { setEditing(null); } })) : h(React.Fragment, null,
@@ -918,7 +926,7 @@ window.__ModuleLoader__.load({
           visible.length ? h('div', { className: 'daj-character-grid' }, visible.map(function (item) {
             const own = ownedCharacter(data, item.id), worn = data.equipment && data.equipment.character === item.id;
             return h('article', { key: item.id, className: 'daj-card daj-character-card daj-rarity-' + item.rarity + (worn ? ' daj-character-worn' : '') }, h('div', { className: 'daj-character-topline' }, h('span', { className: 'daj-rarity' }, item.rarity), h('small', null, THEMES[item.theme] && THEMES[item.theme].name)),
-              h(CharacterArt, { character: item, reduce: reducedMotion(data), size: 110 }), h('h3', null, item.name), h('p', null, item.description), h('small', { className: 'daj-character-count' }, own ? '已收藏 ' + exact(own.count) + ' 份' : '尚未获得 · 已在卡池'),
+              h(CharacterArt, { character: item, data: data, reduce: reducedMotion(data), size: 110 }), h('h3', null, item.name), h('p', null, item.description), h('small', { className: 'daj-character-count' }, own ? '已收藏 ' + exact(own.count) + ' 份' : '尚未获得 · 已在卡池'),
               h(Button, { className: worn ? '' : 'daj-primary', disabled: state.busy || !own, 'aria-label': (worn ? '取下角色 ' : '佩戴角色 ') + item.name, onClick: function () { void mutate('/equip', { id: item.id, slot: 'character', equipped: !worn }); } }, worn ? '正在陪伴 · 取下' : own ? '佩戴到成就框' : '抽取后可佩戴'),
               item.source !== 'builtin' ? h(Button, { className: 'daj-text-button', 'aria-label': '编辑角色 ' + item.name, onClick: function () { setEditing(item); setMode('create'); } }, '编辑外观') : null);
           })) : h('section', { className: 'daj-card' }, h(Empty, { title: filter === 'owned' ? '还没有遇见第一位同伴' : '这个主题的卡池还很安静', icon: 'star', action: h(Button, { onClick: function () { setFilter('pool'); } }, '看看全部卡池') }, filter === 'owned' ? '解锁成就积累点数，再来抽取喜欢的主题。' : '可以让模型或自己创作新角色。'))));
@@ -1252,6 +1260,7 @@ window.__ModuleLoader__.load({
           h('header', { className: 'daj-center-header' }, h('div', { className: 'daj-brand' }, h(Icon, { name: 'medal', size: 20 }), h('strong', null, '成就手记'), h('span', null, '留给自己的每一步')),
             h('div', { className: 'daj-header-actions' },
               data ? h('label', { className: 'daj-theme-select' }, h('span', null, '主题'), h('select', { id: 'daj-global-theme', value: themeId(data), disabled: state.busy || state.drawPending || state.drawRetry, title: state.drawPending || state.drawRetry ? '请先确认这次十连结果，再切换主题' : '切换全部页面的主题', 'aria-label': '成就主题', onChange: function (event) { void preferences({ theme: event.target.value }); } }, Object.keys(THEMES).map(function (id) { return h('option', { key: id, value: id }, THEMES[id].name); }))) : null,
+              data ? h('label', { className: 'daj-portrait-style-select' }, h('span', null, '画风'), h('select', { id: 'daj-global-portrait-style', value: portraitStyle(data), disabled: state.busy, title: '切换全部角色的默认立绘画风，上传图片保持原样', 'aria-label': '角色画风', onChange: function (event) { void preferences({ portraitStyle: event.target.value }); } }, Object.keys(PORTRAIT_STYLES).map(function (id) { return h('option', { key: id, value: id }, PORTRAIT_STYLES[id]); }))) : null,
               h(Button, { className: 'daj-icon-button', 'aria-label': '主题与反馈设置', 'aria-expanded': settingsOpen, onClick: function () { setSettingsOpen(!settingsOpen); } }, h(Icon, { name: 'settings', size: 18 })),
               h(Button, { className: 'daj-icon-button', 'aria-label': '关闭成就手记', onClick: closeCenter }, h(Icon, { name: 'close', size: 19 })))),
           h('nav', { className: 'daj-tabs', 'aria-label': '成就页面' }, TAB_IDS.map(function (id, index) {

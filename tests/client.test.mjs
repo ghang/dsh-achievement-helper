@@ -9,6 +9,13 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 const PIXEL_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7E8AAAAASUVORK5CYII=';
 const PIXEL_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 function character(overrides = {}) { return { id: 'hero', name: '山海小狐', description: '带着莲灯的旅途同伴', theme: 'explorer', rarity: 'SR', icon: 'fox', animation: 'float', source: 'builtin', ...overrides }; }
+const PORTRAIT_THEMES = ['explorer', 'xianxia', 'cyber', 'wuxia', 'fantasy', 'space', 'ocean', 'garden', 'academy', 'steampunk'];
+function portraitManifest() {
+  return { version: 2, styles: Object.fromEntries(['flat', 'pixel'].map(style => [style, { label: style === 'pixel' ? '微像素' : '清爽扁平', themes: Object.fromEntries(PORTRAIT_THEMES.map(theme => [theme, {
+    url: `/dsh-achievement-journal/api/assets/portraits/${style}/${theme}.webp?version=abc123def456`, columns: 4, rows: 2, aspect: 1,
+    characters: Array.from({ length: 8 }, (_, index) => ({ id: `builtin:${theme}:${index + 1}`, icon: 'fox', column: index % 4, row: Math.floor(index / 4) })),
+  }])) }])) };
+}
 function journal(overrides = {}) {
   return {
     revision: 1, createdAt: 1792886400000, updatedAt: 1792886401000,
@@ -39,7 +46,7 @@ function harness(initial = journal(), options = {}) {
   const server = { state: clone(initial), sessionKey: options.sessionKey, uiSessionGetterReads: 0, wide: true, job: options.job ? clone(options.job) : null, failGenerationStart: null, failGenerationStartCode: 'GENERATION_UNAVAILABLE', failGenerationGet: null,
     generationWrites: 0, failGenerationAfterCommit: false, failGenerationAfterCommitCode: null,
     drawWrites: 0, failDrawAfterCommit: false, failDrawAfterCommitCode: null, systemReduce: false, canvasDraws: 0,
-    debugStates, ignoreStateAbort: false, imageErrors: new Set(options.imageErrors ?? []),
+    debugStates, ignoreStateAbort: false, images: [], imageErrors: new Set(options.imageErrors ?? []),
     failState: null, hangState: false, deferNextState: false, failPost: null, failCatalog: null,
     catalog: { metrics: [{ id: 'tokens' }, { id: 'file_read' }, { id: 'recipe' }], templates: ['count', 'model_report'], equipment: { charms: ['compass', 'star', 'leaf'] },
       capabilities: options.capabilities, collection: { drawCost: 1, drawSize: 10, iconIds: ['fox', 'robot', 'lotus', 'ship'], animationIds: ['none', 'float', 'pulse', 'orbit', 'spark'], limits: options.collectionLimits },
@@ -65,7 +72,7 @@ function harness(initial = journal(), options = {}) {
     sessionStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
     matchMedia: () => ({ get matches() { return server.systemReduce; }, addEventListener(_name, listener) { mediaListeners.add(listener); }, removeEventListener(_name, listener) { mediaListeners.delete(listener); } }),
     FileReader: class { readyState = 0; readAsDataURL(file) { this.readyState = 1; queueMicrotask(() => { if (this.readyState !== 1) return; this.readyState = 2; this.result = file.dataURL; this.onload?.(); }); } abort() { this.readyState = 2; this.onabort?.(); } },
-    Image: class { naturalWidth = 1; naturalHeight = 1; set src(value) { queueMicrotask(() => server.imageErrors.has(value) ? this.onerror?.() : this.onload?.()); } },
+    Image: class { naturalWidth = 1; naturalHeight = 1; set src(value) { server.images.push({ image: this, url: value, onload: this.onload, onerror: this.onerror }); if (!options.manualImages) queueMicrotask(() => server.imageErrors.has(value) ? this.onerror?.() : this.onload?.()); } },
   };
   const required = [];
   const React = {
@@ -664,6 +671,198 @@ test('portrait atlas uses the exact cell crop, user art takes priority and loadi
   const failed = harness(state, { portraits, imageErrors: [url] }); t.after(() => failed.cleanup()); await failed.ready();
   assert.ok(!failed.nodes().some(node => node.props?.className === 'daj-character-portrait'));
   assert.ok(failed.nodes().some(node => node.type === 'svg' && node.props.viewBox === '0 0 140 160'));
+});
+
+test('one global portrait style switches the frame, collection, ten-pull results and editor without changing game state', async t => {
+  const hero = character({ id: 'hero-explorer', source: 'model' });
+  const receipt = { requestId: 'style-draw', theme: 'explorer', at: 100, cost: 1, results: Array.from({ length: 10 }, (_, index) => ({ id: hero.id, rarity: hero.rarity, isNew: index === 0 })) };
+  const initial = journal({ equipment: { badges: [], charm: 'star', character: hero.id }, collection: { points: { earned: 1, spent: 1, balance: 0 }, characters: [hero], owned: [{ id: hero.id, count: 10, firstAt: 100 }], draws: [receipt] } });
+  const app = harness(initial, { portraits: portraitManifest() }); t.after(() => app.cleanup());
+  await app.ready(); app.click('打开成就中心'); app.click('角色收藏');
+  const selector = app.nodes().filter(node => node.props?.id === 'daj-global-portrait-style');
+  assert.equal(selector.length, 1); assert.equal(selector[0].props.value, 'flat');
+  assert.ok(!app.requests.some(item => item.options.method === 'POST'), 'Displaying the default style must not write legacy preferences');
+  assert.deepEqual(Array.from(selector[0].props.children, node => node.props.value), ['flat', 'pixel']);
+  assert.match(app.textContent(selector[0]), /清爽扁平.*微像素/);
+  assert.equal(app.nodes().filter(node => node.props?.['aria-label'] === '成就页面').length, 1);
+  const sprites = () => app.nodes().filter(node => node.props?.className === 'daj-character-portrait');
+  assert.ok(sprites().length >= 12);
+  assert.ok(sprites().every(node => node.props.style.backgroundImage.includes('/flat/explorer.webp')));
+  app.change('daj-global-portrait-style', 'pixel'); await app.ready();
+  assert.ok(sprites().every(node => node.props.style.backgroundImage.includes('/pixel/explorer.webp')));
+  assert.ok(app.nodes().filter(node => node.props?.className?.startsWith('daj-character-art')).every(node => node.props['data-portrait-style'] === 'pixel'));
+  app.click('编辑角色 山海小狐'); app.change('daj-character-name', '尚未保存的名字');
+  app.change('daj-global-portrait-style', 'flat'); await app.ready();
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-character-name').props.value, '尚未保存的名字');
+  assert.ok(sprites().every(node => node.props.style.backgroundImage.includes('/flat/explorer.webp')));
+  app.change('daj-global-portrait-style', 'pixel'); await app.ready();
+  app.change('daj-settings-motion', 'reduce'); await app.ready();
+  assert.ok(sprites().every(node => node.props.style.backgroundImage.includes('/pixel/explorer.webp')));
+  assert.ok(app.nodes().filter(node => node.props?.className?.startsWith('daj-character-art')).every(node => node.props['data-animation'] === 'none'));
+  for (const key of ['collection', 'equipment', 'definitions', 'awards', 'timeline', 'totals', 'level']) assert.deepEqual(clone(app.state().data[key]), initial[key]);
+  const posts = app.requests.filter(item => item.options.method === 'POST');
+  assert.ok(posts.every(item => item.url.endsWith('/preferences')));
+  assert.deepEqual(JSON.parse(posts.at(-2).options.body), { portraitStyle: 'pixel' });
+  assert.deepEqual(JSON.parse(posts.at(-1).options.body), { reducedMotion: 'reduce' });
+});
+
+test('both portrait families cover all ten global themes and keep the same character identities and rarity', async t => {
+  const rarities = ['N', 'N', 'R', 'R', 'SR', 'SR', 'SSR', 'SSR'];
+  const cards = PORTRAIT_THEMES.flatMap(theme => Array.from({ length: 8 }, (_, index) => character({ id: `builtin:${theme}:${index + 1}`, theme, name: theme + '同伴' + (index + 1), rarity: rarities[index] })));
+  const initial = journal({ collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: cards, owned: cards.map(item => ({ id: item.id, count: 1, firstAt: 1 })), draws: [] } });
+  const app = harness(initial, { portraits: portraitManifest() }); t.after(() => app.cleanup()); await app.ready();
+  app.click('打开成就中心'); app.click('角色收藏');
+  for (const theme of PORTRAIT_THEMES) {
+    app.change('daj-global-theme', theme); await app.ready();
+    for (const style of ['pixel', 'flat']) {
+      app.change('daj-global-portrait-style', style); await app.ready();
+      const visible = app.nodes().filter(node => node.type === 'article' && node.props.className?.includes('daj-character-card'));
+      assert.equal(visible.length, 8);
+      visible.forEach((card, index) => {
+        assert.match(app.textContent(card), new RegExp(theme + '同伴' + (index + 1)));
+        const sprite = app.nodes(card).find(node => node.props?.className === 'daj-character-portrait');
+        assert.ok(sprite); assert.equal(sprite.props.style.backgroundImage, `url("/dsh-achievement-journal/api/assets/portraits/${style}/${theme}.webp?version=abc123def456")`);
+        assert.equal(sprite.props.style.backgroundPosition, `${index % 4 / 3 * 100}% ${Math.floor(index / 4) * 100}%`);
+        const art = app.nodes(card).find(node => node.props?.['data-portrait-style']);
+        assert.equal(art.props['data-portrait-style'], style); assert.equal(art.props.style['--daj-character-aspect'], 1);
+        assert.match(card.props.className, new RegExp('daj-rarity-' + rarities[index] + '(?: |$)'));
+      });
+    }
+  }
+  assert.deepEqual(clone(app.state().data.collection), initial.collection);
+  assert.ok(!app.requests.some(item => item.options.method === 'POST' && !item.url.endsWith('/preferences')));
+});
+
+test('theme, portrait style, feedback and frame saves preserve each other and a failed style save keeps the current atlas', async t => {
+  const hero = character({ id: 'builtin:xianxia:1', theme: 'xianxia' });
+  const initial = journal({ preferences: { theme: 'explorer', notifications: 'unlocks', reducedMotion: 'system', frameStyle: 'standard', frameHeight: 77 }, equipment: { badges: [], charm: null, character: hero.id }, collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [hero], owned: [{ id: hero.id, count: 1, firstAt: 1 }], draws: [] } });
+  const app = harness(initial, { portraits: portraitManifest() }); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心');
+  app.change('daj-global-portrait-style', 'pixel'); await app.ready();
+  app.change('daj-global-theme', 'xianxia'); await app.ready();
+  assert.equal(app.state().data.preferences.portraitStyle, 'pixel');
+  app.change('daj-settings-motion', 'reduce'); await app.ready();
+  app.click('主题与反馈设置'); app.change('daj-center-frame-height', '101'); app.click('保存展示框'); await app.ready();
+  assert.deepEqual(clone(app.state().data.preferences), { ...initial.preferences, theme: 'xianxia', portraitStyle: 'pixel', reducedMotion: 'reduce', frameHeight: 101 });
+  app.server.failPost = '暂时无法保存画风'; app.change('daj-global-portrait-style', 'flat'); await app.ready();
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-global-portrait-style').props.value, 'pixel');
+  assert.equal(app.state().data.preferences.theme, 'xianxia'); assert.match(app.textContent(), /暂时无法保存画风/);
+  const sprites = app.nodes().filter(node => node.props?.className === 'daj-character-portrait');
+  assert.ok(sprites.length); assert.ok(sprites.every(node => node.props.style.backgroundImage.includes('/pixel/xianxia.webp')));
+  assert.ok(app.requests.filter(item => item.options.method === 'POST').every(item => item.url.endsWith('/preferences')));
+});
+
+test('a stale window changing portrait style preserves another window theme, feedback and frame changes and synchronizes the response', async t => {
+  const cards = ['explorer', 'xianxia'].map(theme => character({ id: `builtin:${theme}:1`, theme }));
+  const initial = journal({ preferences: { theme: 'explorer', portraitStyle: 'flat', notifications: 'all', reducedMotion: 'system', frameStyle: 'standard', frameHeight: 64 }, collection: { points: { earned: 1, spent: 0, balance: 1 }, characters: cards, owned: cards.map(item => ({ id: item.id, count: 1, firstAt: 1 })), draws: [] } });
+  const app = harness(initial, { portraits: portraitManifest() }); t.after(() => app.cleanup()); await app.ready();
+  app.click('打开成就中心'); app.click('角色收藏');
+  const otherWindow = { ...initial.preferences, theme: 'xianxia', notifications: 'off', reducedMotion: 'reduce', frameStyle: 'showcase', frameHeight: 119 };
+  app.server.state.preferences = otherWindow; app.server.state.revision++;
+  assert.deepEqual(clone(app.state().data.preferences), initial.preferences, 'This window has not polled the other window changes yet');
+  app.change('daj-global-portrait-style', 'pixel'); await app.ready();
+  const expected = { ...otherWindow, portraitStyle: 'pixel' };
+  assert.deepEqual(JSON.parse(app.requests.filter(item => item.url.endsWith('/preferences')).at(-1).options.body), { portraitStyle: 'pixel' });
+  assert.deepEqual(app.server.state.preferences, expected); assert.deepEqual(clone(app.state().data.preferences), expected);
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-global-theme').props.value, 'xianxia');
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-global-portrait-style').props.value, 'pixel');
+  const portraits = app.nodes().filter(node => node.props?.className === 'daj-character-portrait');
+  assert.ok(portraits.length); assert.ok(portraits.every(node => node.props.style.backgroundImage.includes('/pixel/xianxia.webp')));
+  assert.deepEqual(clone(app.state().data.collection), initial.collection);
+});
+
+test('a stale window changing only theme preserves another window portrait style and synchronizes the new atlas', async t => {
+  const hero = character({ id: 'builtin:garden:1', theme: 'garden' });
+  const initial = journal({ preferences: { theme: 'explorer', portraitStyle: 'flat', notifications: 'all', reducedMotion: 'system', frameStyle: 'standard', frameHeight: 64 }, collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [hero], owned: [{ id: hero.id, count: 1, firstAt: 1 }], draws: [] } });
+  const app = harness(initial, { portraits: portraitManifest() }); t.after(() => app.cleanup()); await app.ready();
+  app.click('打开成就中心'); app.click('角色收藏');
+  const otherWindow = { ...initial.preferences, portraitStyle: 'pixel', notifications: 'unlocks' };
+  app.server.state.preferences = otherWindow; app.server.state.revision++;
+  assert.equal(app.state().data.preferences.portraitStyle, 'flat', 'The local selector still contains the previous style');
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-global-portrait-style').props.value, 'flat');
+  app.change('daj-global-theme', 'garden'); await app.ready();
+  const expected = { ...otherWindow, theme: 'garden' };
+  assert.deepEqual(JSON.parse(app.requests.filter(item => item.url.endsWith('/preferences')).at(-1).options.body), { theme: 'garden' });
+  assert.deepEqual(app.server.state.preferences, expected); assert.deepEqual(clone(app.state().data.preferences), expected);
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-global-portrait-style').props.value, 'pixel');
+  const portraits = app.nodes().filter(node => node.props?.className === 'daj-character-portrait');
+  assert.ok(portraits.length); assert.ok(portraits.every(node => node.props.style.backgroundImage.includes('/pixel/garden.webp')));
+  assert.deepEqual(clone(app.state().data.collection), initial.collection);
+});
+
+test('an unavailable or mismatched selected portrait family falls back without requesting another theme or a remote image', async t => {
+  const hero = character({ id: 'builtin:explorer:1' });
+  const initial = journal({ preferences: { theme: 'explorer', portraitStyle: 'pixel', reducedMotion: 'system' }, equipment: { badges: [], charm: null, character: hero.id }, collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [hero], owned: [{ id: hero.id, count: 1, firstAt: 1 }], draws: [] } });
+  for (const invalid of ['missing', '/dsh-achievement-journal/api/assets/portraits/flat/explorer.webp?version=abc123def456', '/dsh-achievement-journal/api/assets/portraits/pixel/xianxia.webp?version=abc123def456', 'https://example.invalid/portrait.webp']) {
+    const portraits = portraitManifest();
+    if (invalid === 'missing') delete portraits.styles.pixel;
+    else portraits.styles.pixel.themes.explorer.url = invalid;
+    const app = harness(initial, { portraits }); t.after(() => app.cleanup()); await app.ready();
+    assert.ok(!app.nodes().some(node => node.props?.className === 'daj-character-portrait'));
+    assert.ok(app.nodes().some(node => node.type === 'svg' && node.props.viewBox === '0 0 140 160'));
+    assert.equal(app.server.images.length, 0);
+  }
+});
+
+test('delayed portrait errors from a previous style cannot replace the current atlas or a newer retry', async t => {
+  const hero = character({ id: 'hero-explorer' });
+  const app = harness(journal({ equipment: { badges: [], charm: null, character: hero.id }, collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [hero], owned: [{ id: hero.id, count: 1, firstAt: 1 }], draws: [] } }), { portraits: portraitManifest(), manualImages: true });
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心');
+  const previous = app.server.images.find(item => item.url.includes('/flat/explorer.webp'));
+  assert.equal(typeof previous.onerror, 'function');
+  const sprites = () => app.nodes().filter(node => node.props?.className === 'daj-character-portrait');
+  app.change('daj-global-portrait-style', 'pixel'); await app.ready();
+  previous.onerror(); app.render();
+  assert.ok(sprites().length); assert.ok(sprites().every(node => node.props.style.backgroundImage.includes('/pixel/')));
+  app.change('daj-global-portrait-style', 'flat'); await app.ready();
+  const latest = app.server.images.filter(item => item.url.includes('/flat/explorer.webp')).at(-1);
+  assert.notEqual(latest, previous); previous.onerror(); app.render();
+  assert.ok(sprites().length); assert.ok(sprites().every(node => node.props.style.backgroundImage.includes('/flat/')));
+  const beforeFailure = sprites().length; latest.onerror(); app.render(); assert.ok(sprites().length < beforeFailure);
+  app.change('daj-global-portrait-style', 'pixel'); await app.ready();
+  assert.ok(sprites().length); assert.ok(sprites().every(node => node.props.style.backgroundImage.includes('/pixel/')));
+  app.change('daj-global-portrait-style', 'flat'); await app.ready();
+  assert.equal(sprites().length, beforeFailure);
+  latest.onerror(); app.render(); assert.equal(sprites().length, beforeFailure);
+});
+
+test('uploaded artwork stays original in pixel style and stale reduced-motion image loads cannot restore old artwork', async t => {
+  const hero = character({ id: 'hero-explorer', source: 'user', art: PIXEL_GIF });
+  const app = harness(journal({ equipment: { badges: [], charm: null, character: hero.id }, collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [hero], owned: [{ id: hero.id, count: 1, firstAt: 1 }], draws: [] } }), { portraits: portraitManifest(), manualImages: true });
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心');
+  app.change('daj-global-portrait-style', 'pixel'); await app.ready();
+  assert.ok(app.nodes().filter(node => node.type === 'img').every(node => node.props.src === PIXEL_GIF));
+  assert.ok(app.nodes().filter(node => node.props?.className?.startsWith('daj-character-art')).every(node => node.props['data-portrait-style'] === 'custom'));
+  assert.ok(!app.server.images.some(item => item.url.includes('/assets/portraits/')));
+  app.change('daj-settings-motion', 'reduce'); await app.ready();
+  const old = app.server.images.find(item => item.url === PIXEL_GIF);
+  assert.equal(typeof old.onload, 'function');
+  app.server.state.collection.characters[0].art = PIXEL_PNG; app.server.state.revision++; await app.advance(1800); app.render();
+  const current = app.server.images.filter(item => item.url === PIXEL_PNG).at(-1);
+  assert.ok(current); old.onload(); app.render(); assert.equal(app.server.canvasDraws, 0);
+  current.onload(); app.render(); assert.equal(app.server.canvasDraws, 1);
+  assert.ok(app.nodes().filter(node => node.type === 'img').every(node => node.props.src === PIXEL_PNG));
+  assert.equal(app.state().data.collection.characters[0].art, PIXEL_PNG);
+  assert.ok(app.nodes().filter(node => node.props?.className?.startsWith('daj-character-art')).every(node => node.props['data-animation'] === 'none'));
+  app.cleanup(); old.onload(); current.onload(); assert.equal(app.server.canvasDraws, 1);
+});
+
+test('debug portrait preferences stay scoped and resetting or exiting restores the real style', async t => {
+  const app = harness(journal({ preferences: { theme: 'explorer', portraitStyle: 'flat', notifications: 'all', reducedMotion: 'system' } }), { portraits: portraitManifest() });
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('主题与反馈设置');
+  app.click('进入调试模式'); await app.ready(); const token = app.state().data.debug.sessionId;
+  app.change('daj-global-portrait-style', 'pixel'); await app.ready();
+  assert.equal(app.state().data.preferences.portraitStyle, 'pixel'); assert.equal(app.server.state.preferences.portraitStyle, 'flat');
+  const post = app.requests.filter(item => item.url.endsWith('/preferences')).at(-1);
+  assert.equal(post.options.headers['x-daj-debug'], token); assert.equal(JSON.parse(post.options.body).portraitStyle, 'pixel');
+  app.click('重置调试数据'); await app.ready();
+  assert.equal(app.nodes().find(node => node.props?.id === 'daj-global-portrait-style').props.value, 'flat');
+  assert.notEqual(app.state().data.debug.sessionId, token);
+  app.click('退出调试模式'); await app.ready();
+  assert.equal(app.state().debugActive, false); assert.equal(app.state().data.preferences.portraitStyle, 'flat');
+  assert.equal(app.server.state.preferences.portraitStyle, 'flat');
+  app.change('daj-global-portrait-style', 'pixel'); await app.ready();
+  assert.equal(app.server.state.preferences.portraitStyle, 'pixel');
+  assert.equal(app.requests.filter(item => item.url.endsWith('/preferences')).at(-1).options.headers['x-daj-debug'], undefined);
 });
 
 test('every drawn card exposes an immediate equip action and the frame shows the current character', async t => {

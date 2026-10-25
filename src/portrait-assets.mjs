@@ -1,11 +1,13 @@
 import { constants } from 'node:fs';
-import { open, readFile } from 'node:fs/promises';
+import { open, lstat } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { THEME_IDS, ICON_IDS } from './collection.mjs';
 
-export const PORTRAIT_LIMITS = Object.freeze({ assetBytes: 1024 * 1024, totalBytes: 4 * 1024 * 1024, manifestBytes: 128 * 1024 });
+export const PORTRAIT_LIMITS = Object.freeze({ assetBytes: 1024 * 1024, totalBytes: 12 * 1024 * 1024, manifestBytes: 128 * 1024 });
+export const PORTRAIT_STYLE_IDS = Object.freeze(['flat', 'pixel']);
+export const PORTRAIT_STYLE_LABELS = Object.freeze({ flat: '清爽扁平', pixel: '微像素' });
 const PREFIX = '/dsh-achievement-journal/api/assets/portraits/';
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 const defaultManifest = join(moduleDirectory, 'portrait-manifest.json');
@@ -17,26 +19,29 @@ const fields = (value, allowed) => { if (!plain(value) || Object.keys(value).som
 const copy = value => structuredClone(value);
 
 export function validatePortraitManifest(input) {
-  fields(input, ['version', 'themes']);
-  if (input.version !== 1) fail('Unsupported portrait manifest version.');
-  fields(input.themes, THEME_IDS);
-  if (Object.keys(input.themes).length !== THEME_IDS.length) fail('Portrait manifest must contain all ten themes.');
-  const result = { version: 1, themes: {} };
+  fields(input, ['version', 'styles']);
+  if (input.version !== 2) fail('Unsupported portrait manifest version.');
+  fields(input.styles, PORTRAIT_STYLE_IDS);
+  if (Object.keys(input.styles).length !== PORTRAIT_STYLE_IDS.length) fail('Portrait manifest must contain exactly flat and pixel styles.');
+  const result = { version: 2, styles: {} };
   let declaredBytes = 0;
+  for (const style of PORTRAIT_STYLE_IDS) {
+    const source = input.styles[style]; fields(source, ['label', 'themes']);
+    if (source.label !== PORTRAIT_STYLE_LABELS[style]) fail('Invalid portrait style label.');
+    fields(source.themes, THEME_IDS);
+    if (Object.keys(source.themes).length !== THEME_IDS.length) fail('Each style must contain all ten themes.');
+    const themes = {};
   for (const theme of THEME_IDS) {
-    const entry = input.themes[theme];
+    const entry = source.themes[theme];
     fields(entry, ['file', 'url', 'columns', 'rows', 'aspect', 'characters', 'sha256', 'width', 'height', 'bytes']);
-    const file = `${theme}.webp`, pathname = PREFIX + file;
-    if (entry.file !== file || typeof entry.url !== 'string' || entry.url.split(/[?#]/, 1)[0] !== pathname || /[\\\u0000-\u001f\u007f]/u.test(entry.url)) fail('Portrait files and URLs must use the local theme whitelist.');
-    let url; try { url = new URL(entry.url, 'http://portrait.local'); } catch { fail('Invalid portrait URL.'); }
-    if (url.origin !== 'http://portrait.local' || url.pathname !== pathname || url.hash || [...url.searchParams.keys()].some(key => key !== 'version') || url.searchParams.getAll('version').length > 1) fail('Portrait URLs must stay inside the local asset route.');
-    if (entry.columns !== 4 || entry.rows !== 2 || typeof entry.aspect !== 'number' || !Number.isFinite(entry.aspect) || entry.aspect <= 0 || entry.aspect > 8) fail('Portrait grid must have four columns and two rows with a positive aspect.');
-    if (entry.sha256 !== undefined && (typeof entry.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(entry.sha256))) fail('Invalid portrait checksum.');
-    const version = url.searchParams.get('version');
-    if (version !== null && !(entry.sha256 ? [entry.sha256, entry.sha256.slice(0, 12)] : ['1']).includes(version)) fail('Portrait URL version disagrees with the manifest.');
-    for (const key of ['width', 'height', 'bytes']) if (entry[key] !== undefined && !integer(entry[key])) fail('Portrait dimensions and size must be positive integers.');
-    if (entry.bytes !== undefined && entry.bytes >= PORTRAIT_LIMITS.assetBytes) fail('Portrait exceeds the per-file budget.');
-    declaredBytes += entry.bytes ?? 0;
+    const file = `${theme}.webp`;
+    if (typeof entry.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(entry.sha256)) fail('A complete portrait checksum is required.');
+    if (entry.file !== file || entry.url !== `${PREFIX}${style}/${file}?version=${entry.sha256.slice(0, 12)}`) fail('Portrait files and versioned URLs must use the local style/theme whitelist.');
+    if (entry.columns !== 4 || entry.rows !== 2 || entry.aspect !== 1) fail('Portrait grid must have four columns and two rows of square cells.');
+    for (const key of ['width', 'height', 'bytes']) if (!integer(entry[key])) fail('Portrait dimensions and size must be positive integers.');
+    if (entry.width % 4 || entry.height % 2 || entry.width !== 2 * entry.height || entry.width > 16384 || entry.height > 16384 || entry.width * entry.height > 64 * 1024 * 1024) fail('Portrait dimensions disagree with its square-cell grid.');
+    if (entry.bytes > PORTRAIT_LIMITS.assetBytes) fail('Portrait exceeds the per-file budget.');
+    declaredBytes += entry.bytes;
     if (!Array.isArray(entry.characters) || entry.characters.length !== 8) fail('Each portrait sheet must have eight character cells.');
     const ids = new Set(), cells = new Set();
     const characters = entry.characters.map(character => {
@@ -49,15 +54,16 @@ export function validatePortraitManifest(input) {
       ids.add(character.id); cells.add(cell);
       return { id: character.id, name: character.name, icon: character.icon, column: character.column, row: character.row };
     });
-    result.themes[theme] = { file, url: entry.url, columns: 4, rows: 2, aspect: entry.aspect, characters,
-      ...Object.fromEntries(['sha256', 'width', 'height', 'bytes'].filter(key => entry[key] !== undefined).map(key => [key, entry[key]])) };
+    themes[theme] = { file, url: entry.url, columns: 4, rows: 2, aspect: 1, characters, sha256: entry.sha256, width: entry.width, height: entry.height, bytes: entry.bytes };
+  }
+    result.styles[style] = { label: source.label, themes };
   }
   if (declaredBytes > PORTRAIT_LIMITS.totalBytes) fail('Portrait sheets exceed the total asset budget.');
   return result;
 }
 
 export function inspectPortraitWebP(bytes) {
-  if (!Buffer.isBuffer(bytes) || bytes.length < 20 || bytes.length >= PORTRAIT_LIMITS.assetBytes || bytes.toString('ascii', 0, 4) !== 'RIFF' || bytes.readUInt32LE(4) !== bytes.length - 8 || bytes.toString('ascii', 8, 12) !== 'WEBP') fail('Invalid or oversized WebP container.');
+  if (!Buffer.isBuffer(bytes) || bytes.length < 20 || bytes.length > PORTRAIT_LIMITS.assetBytes || bytes.toString('ascii', 0, 4) !== 'RIFF' || bytes.readUInt32LE(4) !== bytes.length - 8 || bytes.toString('ascii', 8, 12) !== 'WEBP') fail('Invalid or oversized WebP container.');
   let width, height, image = false, offset = 12;
   for (; offset < bytes.length;) {
     if (offset + 8 > bytes.length) fail('Truncated WebP chunk header.');
@@ -88,12 +94,18 @@ export function inspectPortraitWebP(bytes) {
 
 function routeOf(req, value) {
   const raw = typeof value === 'string' ? value : req.url ?? value?.href ?? '';
-  if (typeof value === 'string' && !value.startsWith('/')) return null;
+  if (typeof raw !== 'string' || !raw.startsWith('/') || raw.startsWith('//')) return null;
   const rawPath = raw.split(/[?#]/, 1)[0];
   if (/[\\\u0000-\u001f\u007f]/u.test(raw) || /%2e|%2f|%5c|%00/i.test(rawPath) || /(?:^|\/)\.\.?($|\/)/.test(rawPath)) return null;
-  let url; try { url = value instanceof URL ? value : new URL(raw, 'http://portrait.local'); } catch { return null; }
-  const theme = THEME_IDS.find(id => url.pathname === PREFIX + id + '.webp');
-  return theme ? { theme, url } : null;
+  let url; try { url = new URL(raw, 'http://portrait.local'); } catch { return null; }
+  if (url.hash) return null;
+  if (value instanceof URL) {
+    const host = req.headers?.host;
+    const origins = ['http://portrait.local', 'http://local', ...typeof host === 'string' ? [`http://${host}`, `https://${host}`] : []];
+    if (!origins.includes(value.origin) || value.pathname !== url.pathname || value.search !== url.search || value.hash) return null;
+  }
+  for (const style of PORTRAIT_STYLE_IDS) for (const theme of THEME_IDS) if (url.pathname === `${PREFIX}${style}/${theme}.webp`) return { style, theme, url };
+  return null;
 }
 function reject(res, status, code, head = false) {
   const body = JSON.stringify({ error: code });
@@ -104,37 +116,40 @@ function reject(res, status, code, head = false) {
 /** Lazy local assets only; callers must perform their browser admission first. */
 export async function createPortraitAssets({ manifest, manifestFile = defaultManifest, assetsDir = defaultAssets } = {}) {
   if (manifest === undefined) {
-    const bytes = await readFile(manifestFile);
-    if (bytes.length > PORTRAIT_LIMITS.manifestBytes) fail('Portrait manifest exceeds its budget.');
-    manifest = JSON.parse(bytes.toString('utf8'));
+    const handle = await open(manifestFile, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try { const stat = await handle.stat(); if (!stat.isFile() || stat.size > PORTRAIT_LIMITS.manifestBytes) fail('Portrait manifest exceeds its budget.'); manifest = JSON.parse(await handle.readFile('utf8')); }
+    finally { await handle.close(); }
   }
   const metadata = validatePortraitManifest(manifest), cache = new Map();
-  const browserManifest = { version: metadata.version, themes: Object.fromEntries(THEME_IDS.map(theme => {
-    const { url, columns, rows, aspect, characters } = metadata.themes[theme];
+  const browserManifest = { version: metadata.version, styles: Object.fromEntries(PORTRAIT_STYLE_IDS.map(style => [style, { label: metadata.styles[style].label, themes: Object.fromEntries(THEME_IDS.map(theme => {
+    const { url, columns, rows, aspect, characters } = metadata.styles[style].themes[theme];
     return [theme, { url, columns, rows, aspect, characters }];
-  })) };
-  async function load(theme) {
-    if (!cache.has(theme)) {
+  })) }])) };
+  async function load(style, theme) {
+    const key = `${style}/${theme}`;
+    if (!cache.has(key)) {
       const promise = (async () => {
-        const expected = metadata.themes[theme];
-        const file = await open(join(assetsDir, expected.file), constants.O_RDONLY | constants.O_NOFOLLOW);
+        const expected = metadata.styles[style].themes[theme], styleDir = join(assetsDir, style);
+        const directory = await lstat(styleDir);
+        if (!directory.isDirectory() || directory.isSymbolicLink()) fail('Portrait style folder must be an ordinary directory.');
+        const file = await open(join(styleDir, expected.file), constants.O_RDONLY | constants.O_NOFOLLOW);
         let data;
-        try { const stat = await file.stat(); if (!stat.isFile() || stat.size >= PORTRAIT_LIMITS.assetBytes) fail('Portrait file is invalid or oversized.'); data = await file.readFile(); } finally { await file.close(); }
+        try { const stat = await file.stat(); if (!stat.isFile() || stat.size > PORTRAIT_LIMITS.assetBytes) fail('Portrait file is invalid or oversized.'); data = await file.readFile(); } finally { await file.close(); }
         const actual = inspectPortraitWebP(data);
-        for (const key of ['width', 'height', 'bytes', 'sha256']) if (expected[key] !== undefined && expected[key] !== actual[key]) fail(`Portrait ${key} differs from its manifest.`);
+        for (const field of ['width', 'height', 'bytes', 'sha256']) if (expected[field] !== actual[field]) fail(`Portrait ${field} differs from its manifest.`);
         if (actual.width < expected.columns || actual.height < expected.rows || Math.abs(actual.width / expected.columns / (actual.height / expected.rows) - expected.aspect) > 0.005) fail('Portrait dimensions disagree with its grid aspect.');
         return { data, ...actual };
       })();
-      cache.set(theme, promise);
-      promise.catch(() => { if (cache.get(theme) === promise) cache.delete(theme); });
+      cache.set(key, promise);
+      promise.catch(() => { if (cache.get(key) === promise) cache.delete(key); });
     }
-    return cache.get(theme);
+    return cache.get(key);
   }
   return {
     manifest: copy(browserManifest), metadata: copy(metadata),
     async verifyAll() {
       const assets = [];
-      for (const theme of THEME_IDS) { const { data, ...info } = await load(theme); assets.push({ theme, file: metadata.themes[theme].file, ...info }); }
+      for (const style of PORTRAIT_STYLE_IDS) for (const theme of THEME_IDS) { const { data, ...info } = await load(style, theme); assets.push({ style, theme, file: `${style}/${metadata.styles[style].themes[theme].file}`, ...info }); }
       const totalBytes = assets.reduce((sum, item) => sum + item.bytes, 0);
       if (totalBytes > PORTRAIT_LIMITS.totalBytes) fail('Portrait sheets exceed the total asset budget.');
       return { assets, totalBytes };
@@ -144,10 +159,10 @@ export async function createPortraitAssets({ manifest, manifestFile = defaultMan
       if (!route) return false;
       const head = req.method === 'HEAD';
       if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, { allow: 'GET, HEAD', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(); return true; }
-      const expected = metadata.themes[route.theme], version = route.url.searchParams.get('version');
+      const expected = metadata.styles[route.style].themes[route.theme], version = route.url.searchParams.get('version');
       const expectedVersion = new URL(expected.url, 'http://portrait.local').searchParams.get('version');
       if ([...route.url.searchParams.keys()].some(key => key !== 'version') || route.url.searchParams.getAll('version').length > 1 || version !== null && version !== expectedVersion) return false;
-      let asset; try { asset = await load(route.theme); } catch (error) { return reject(res, error.code === 'ENOENT' ? 404 : 503, 'PORTRAIT_ASSET_UNAVAILABLE', head); }
+      let asset; try { asset = await load(route.style, route.theme); } catch (error) { return reject(res, error.code === 'ENOENT' ? 404 : 503, 'PORTRAIT_ASSET_UNAVAILABLE', head); }
       const etag = `"sha256-${asset.sha256}"`, headers = { 'content-type': 'image/webp', 'x-content-type-options': 'nosniff', etag,
         'cache-control': version !== null ? 'private, max-age=31536000, immutable' : 'private, no-cache', 'content-length': String(asset.bytes) };
       const match = String(req.headers?.['if-none-match'] ?? '').split(',').map(item => item.trim().replace(/^W\//, '')).some(item => item === '*' || item === etag);

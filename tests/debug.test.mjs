@@ -73,6 +73,23 @@ test('quick completions, charms and draws never change real bytes or pass notifi
   assert.equal(await readFile(f.statePath, 'utf8'), before); assert.equal(f.journal.snapshot().awards.length, 0); assert.deepEqual(f.journal.snapshot().notifications, []);
 });
 
+test('portrait styles stay in their debug copy and reset takes the current real preference', async t => {
+  const f = await fixture(t), before = await readFile(f.statePath, 'utf8'), initial = f.journal.snapshot();
+  const { token } = await f.c.start();
+  assert.equal(f.c.get(token).snapshot().preferences.portraitStyle, 'flat');
+  const changed = await f.c.mutate(token, 'preferences', { portraitStyle: 'pixel' });
+  assert.equal(changed.preferences.portraitStyle, 'pixel'); assert.deepEqual(changed.collection, initial.collection);
+  assert.equal(await readFile(f.statePath, 'utf8'), before); assert.equal(f.journal.snapshot().preferences.portraitStyle, 'flat');
+  await f.journal.preferences({ portraitStyle: 'pixel' });
+  const current = await readFile(f.statePath, 'utf8'), reset = await f.c.reset(token);
+  assert.equal(reset.snapshot.preferences.portraitStyle, 'pixel');
+  await assert.rejects(f.c.mutate(token, 'preferences', { portraitStyle: 'flat' }), code('DEBUG_SCOPE_EXPIRED'));
+  await f.c.mutate(reset.token, 'preferences', { portraitStyle: 'flat' });
+  await f.c.exit(reset.token);
+  assert.equal(f.journal.snapshot().preferences.portraitStyle, 'pixel'); assert.equal(await readFile(f.statePath, 'utf8'), current);
+  assert.deepEqual(await f.copyFiles(), []);
+});
+
 test('real collection continues during debug and reset takes a fresh copy without merging fake results', async t => {
   const f = await fixture(t), { token } = await f.c.start(); await f.c.action(token, { requestId: 'fake-all', action: 'complete_all' });
   await f.journal.ingest([fact()]); await f.journal.preferences({ theme: 'space', frameHeight: 93 });

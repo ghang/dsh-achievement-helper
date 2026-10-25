@@ -23,7 +23,7 @@ test('a fresh journal has sixteen proposals, stable creation time, and detached 
   const f = await fixture(t);
   const first = f.j.snapshot();
   assert.equal(first.definitions.length, 16);
-  assert.deepEqual(first.preferences, { theme: 'explorer', notifications: 'all', reducedMotion: 'system', frameStyle: 'standard', frameHeight: 64 });
+  assert.deepEqual(first.preferences, { theme: 'explorer', portraitStyle: 'flat', notifications: 'all', reducedMotion: 'system', frameStyle: 'standard', frameHeight: 64 });
   assert.equal(first.level.progress, 0);
   first.preferences.theme = 'cyber'; first.definitions.length = 0;
   assert.equal(f.j.snapshot().preferences.theme, 'explorer');
@@ -33,6 +33,59 @@ test('a fresh journal has sixteen proposals, stable creation time, and detached 
   assert.equal(f.j.snapshot().revision, 0);
   assert.equal(f.j.catalog().defaultDefinitionCount, 16);
   assert.ok(f.j.catalog().recipes.includes('search_read_change'));
+});
+
+test('portrait style persists as appearance without changing earned records, the pool, points or equipment', async t => {
+  const f = await fixture(t);
+  await f.j.ingest([fact('portrait-owned', 'file_read')]);
+  await f.j.draw({ requestId: 'portrait-owned-draw' });
+  await f.j.equip({ slot: 'character', id: f.j.snapshot().collection.owned[0].id });
+  const before = f.j.snapshot(), catalog = f.j.catalog();
+  for (const portraitStyle of ['pixel', 'flat', 'pixel']) {
+    const after = await f.j.preferences({ portraitStyle });
+    assert.equal(after.preferences.portraitStyle, portraitStyle);
+    assert.equal(after.preferences.theme, before.preferences.theme);
+    for (const key of ['definitions', 'awards', 'timeline', 'collection', 'equipment', 'totals', 'level']) assert.deepEqual(after[key], before[key], `${key} must not change with portrait style`);
+    assert.deepEqual(after.notifications, []); assert.deepEqual(f.j.catalog(), catalog);
+  }
+  const saved = JSON.parse(await readFile(f.file, 'utf8'));
+  assert.equal(saved.schemaVersion, 2); assert.equal(saved.preferences.portraitStyle, 'pixel');
+  await f.reopen(); assert.equal(f.j.snapshot().preferences.portraitStyle, 'pixel');
+  const bytes = await readFile(f.file, 'utf8');
+  for (const portraitStyle of ['animated', null, 1, {}]) await assert.rejects(f.j.preferences({ portraitStyle }), errorCode('INVALID_INPUT'));
+  assert.equal(await readFile(f.file, 'utf8'), bytes);
+});
+
+test('an existing schema two archive without portrait style projects flat without an upgrade write', async t => {
+  const f = await fixture(t);
+  await f.j.ingest([fact('old-style-read', 'file_read')]); await f.j.close();
+  const old = JSON.parse(await readFile(f.file, 'utf8')); delete old.preferences.portraitStyle;
+  const oldBytes = JSON.stringify(old, null, 2) + '\n'; await writeFile(f.file, oldBytes);
+  await f.reopen(); const before = f.j.snapshot();
+  assert.equal(before.preferences.portraitStyle, 'flat'); assert.equal(before.revision, old.revision);
+  assert.deepEqual(before.awards, old.awards); assert.deepEqual(before.collection.points, old.collection.points);
+  before.preferences.portraitStyle = 'pixel'; assert.equal(f.j.snapshot().preferences.portraitStyle, 'flat');
+  await f.j.ingest([]); f.j.catalog(); await f.reopen();
+  assert.equal(await readFile(f.file, 'utf8'), oldBytes);
+  await f.j.ingest([fact('old-style-next-read', 'file_read')]);
+  assert.equal(Object.hasOwn(JSON.parse(await readFile(f.file, 'utf8')).preferences, 'portraitStyle'), false);
+  const revision = f.j.snapshot().revision;
+  const saved = await f.j.preferences({ notifications: 'all' });
+  assert.equal(saved.revision, revision + 1); assert.equal(saved.preferences.portraitStyle, 'flat');
+  assert.equal(JSON.parse(await readFile(f.file, 'utf8')).preferences.portraitStyle, 'flat');
+  assert.deepEqual(saved.awards, old.awards); assert.deepEqual(saved.collection.points, old.collection.points);
+});
+
+test('an explicitly invalid stored portrait style refuses startup without changing saved bytes', async t => {
+  const f = await fixture(t); await f.j.close();
+  const good = JSON.parse(await readFile(f.file, 'utf8'));
+  for (const portraitStyle of ['animated', null, 1, {}]) {
+    const data = structuredClone(good); data.preferences.portraitStyle = portraitStyle;
+    const bytes = JSON.stringify(data); await writeFile(f.file, bytes);
+    await assert.rejects(createJournal({ file: f.file }), errorCode('CORRUPT_STATE'));
+    assert.equal(await readFile(f.file, 'utf8'), bytes);
+    assert.ok(!(await readdir(f.directory)).some(name => name.endsWith('.lock')));
+  }
 });
 
 test('concurrent ingests serialize without lost counts, and replay is idempotent across restart', async t => {
