@@ -34,8 +34,11 @@ function harness(initial = journal(), options = {}) {
   const documentEvents = new Map(), windowEvents = new Map(), copied = [];
   const sessionListeners = new Set();
   const mediaListeners = new Set(), storage = options.storage ?? new Map(), drawReceipts = new Map();
+  const debugStates = new Map();
+  const debugTemplate = options.debugTemplate ?? journal({ definitions: [definition()], collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [character()], owned: [], draws: [] } });
   const server = { state: clone(initial), sessionKey: options.sessionKey, uiSessionGetterReads: 0, wide: true, job: options.job ? clone(options.job) : null, failGenerationStart: null, failGenerationGet: null,
     drawWrites: 0, failDrawAfterCommit: false, systemReduce: false, canvasDraws: 0,
+    debugStates, ignoreStateAbort: false, imageErrors: new Set(options.imageErrors ?? []),
     failState: null, hangState: false, deferNextState: false, failPost: null, failCatalog: null,
     catalog: { metrics: [{ id: 'tokens' }, { id: 'file_read' }, { id: 'recipe' }], templates: ['count', 'model_report'], equipment: { charms: ['compass', 'star', 'leaf'] },
       capabilities: options.capabilities, collection: { drawCost: 1, drawSize: 10, iconIds: ['fox', 'robot', 'lotus', 'ship'], animationIds: ['none', 'float', 'pulse', 'orbit', 'spark'], limits: options.collectionLimits },
@@ -61,7 +64,7 @@ function harness(initial = journal(), options = {}) {
     sessionStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
     matchMedia: () => ({ get matches() { return server.systemReduce; }, addEventListener(_name, listener) { mediaListeners.add(listener); }, removeEventListener(_name, listener) { mediaListeners.delete(listener); } }),
     FileReader: class { readyState = 0; readAsDataURL(file) { this.readyState = 1; queueMicrotask(() => { if (this.readyState !== 1) return; this.readyState = 2; this.result = file.dataURL; this.onload?.(); }); } abort() { this.readyState = 2; this.onabort?.(); } },
-    Image: class { naturalWidth = 1; naturalHeight = 1; set src(_value) { queueMicrotask(() => this.onload?.()); } },
+    Image: class { naturalWidth = 1; naturalHeight = 1; set src(value) { queueMicrotask(() => server.imageErrors.has(value) ? this.onerror?.() : this.onload?.()); } },
   };
   const required = [];
   const React = {
@@ -90,21 +93,58 @@ function harness(initial = journal(), options = {}) {
   async function fetch(url, options) {
     requests.push({ url, options });
     const path = url.slice('/dsh-achievement-journal/api'.length).split('?')[0];
+    const token = options.headers?.['x-daj-debug'];
+    const result = body => ({ ok: true, status: 200, json: async () => body });
+    const decorate = (value, scope = token) => ({ ...clone(value), debug: scope ? { active: true, sessionId: scope, label: '调试模式' } : { active: false } });
+    if (path === '/debug/start' || path === '/debug/reset') {
+      if (path === '/debug/reset' && !debugStates.has(token)) return { ok: false, status: 409, json: async () => ({ code: 'DEBUG_SCOPE_EXPIRED', error: '调试会话已失效' }) };
+      if (token) debugStates.delete(token);
+      const fresh = 'debug-' + ++nextId; debugStates.set(fresh, clone(debugTemplate));
+      return result({ token: fresh, snapshot: decorate(debugStates.get(fresh), fresh) });
+    }
+    if (path === '/debug/exit') { debugStates.delete(token); return result({ debug: null }); }
+    if (token && !debugStates.has(token)) return { ok: false, status: 409, json: async () => ({ code: 'DEBUG_SCOPE_EXPIRED', error: '调试会话已失效' }) };
+    const target = token ? debugStates.get(token) : server.state;
+    if (path === '/debug/action') {
+      assert.ok(token, 'Debug actions require an explicit scope');
+      const body = JSON.parse(options.body);
+      function complete() {
+        const selected = target.definitions.filter(item => item.status === 'active' && !item.unlockedAt && (!body.definitionId || item.id === body.definitionId));
+        for (const item of body.action === 'complete_all' ? selected : selected.slice(0, 1)) {
+          item.unlockedAt = 100; target.awards.push({ id: 'debug-award:' + item.id, definitionId: item.id, title: item.title, at: 100, source: 'automatic' });
+        }
+        target.collection.points.earned = target.awards.length; target.collection.points.balance = target.collection.points.earned - target.collection.points.spent;
+      }
+      let receipt;
+      if (body.action === 'complete' || body.action === 'complete_all') complete();
+      if (body.action === 'charm') target.equipment.charm = body.charm;
+      if (body.action === 'draw') {
+        if (!target.collection.points.balance) complete();
+        const item = target.collection.characters.find(item => item.theme === body.theme);
+        assert.ok(item); target.collection.points.spent += 1; target.collection.points.balance -= 1;
+        target.collection.owned.push({ id: item.id, count: 10, firstAt: 100 }); target.equipment.character = item.id;
+        receipt = { requestId: 'debug-draw:' + body.requestId, at: 100, theme: body.theme, cost: 1, results: Array.from({ length: 10 }, (_, index) => ({ id: item.id, rarity: item.rarity, isNew: index === 0 })) };
+        target.collection.draws.push(receipt);
+      }
+      target.revision += 1;
+      return result({ ...decorate(target), ...(receipt ? { draw: clone(receipt) } : {}) });
+    }
     let response;
     if (path === '/state') {
       if (server.hangState) return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }));
       if (server.failState) { const error = server.failState; server.failState = null; throw new Error(error); }
-      response = clone(server.state);
+      response = decorate(target);
       if (server.deferNextState) {
         server.deferNextState = false;
-        await new Promise((resolve, reject) => { server.releaseState = resolve; options.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }); });
+        await new Promise((resolve, reject) => { server.releaseState = resolve; if (!server.ignoreStateAbort) options.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true }); });
       }
     } else if (path === '/catalog') {
       if (server.failCatalog) return { ok: false, status: 503, json: async () => ({ error: server.failCatalog }) };
       response = clone(server.catalog);
+      if (token) response.generation = { available: false, reason: '调试模式不调用模型生成' };
     } else if (path === '/generation' && options.method !== 'POST') {
       if (server.failGenerationGet) return { ok: false, status: 503, json: async () => ({ error: server.failGenerationGet }) };
-      response = { job: clone(server.job) };
+      response = { job: token ? null : clone(server.job) };
     } else if (path === '/generation' && options.method === 'POST') {
       if (server.failGenerationStart) return { ok: false, status: 503, json: async () => ({ error: server.failGenerationStart }) };
       server.job = { id: `job-${++nextId}`, kind: JSON.parse(options.body).kind || 'achievements', status: 'running', stage: 'analyzing', message: '正在分析所选数据', createdAt: 100, updatedAt: 100, createdDefinitionIds: [], createdCharacterIds: [], usageSource: 'auxiliary_generation' };
@@ -116,38 +156,39 @@ function harness(initial = journal(), options = {}) {
     } else if (path === '/draw') {
       const body = JSON.parse(options.body);
       if (!drawReceipts.has(body.requestId)) {
-        if (server.state.collection.points.balance < 1) return { ok: false, status: 409, json: async () => ({ error: '成就点不足' }) };
-        const item = server.state.collection.characters.find(item => item.theme === body.theme);
+        if (target.collection.points.balance < 1) return { ok: false, status: 409, json: async () => ({ error: '成就点不足' }) };
+        const item = target.collection.characters.find(item => item.theme === body.theme);
         assert.ok(item, 'Draw fixture needs a character in the requested theme');
-        const existing = server.state.collection.owned.find(entry => entry.id === item.id);
+        const existing = target.collection.owned.find(entry => entry.id === item.id);
         const receipt = { requestId: 'stored:' + body.requestId, theme: body.theme, at: 200, cost: 1, results: Array.from({ length: 10 }, (_, index) => ({ id: item.id, rarity: item.rarity, isNew: !existing && index === 0 })) };
-        drawReceipts.set(body.requestId, receipt); server.state.collection.draws.push(receipt);
-        if (existing) existing.count += 10; else server.state.collection.owned.push({ id: item.id, count: 10, firstAt: 200 });
-        server.state.collection.points.spent += 1; server.state.collection.points.balance -= 1; server.state.revision += 1; server.drawWrites += 1;
+        drawReceipts.set(body.requestId, receipt); target.collection.draws.push(receipt);
+        if (existing) existing.count += 10; else target.collection.owned.push({ id: item.id, count: 10, firstAt: 200 });
+        target.collection.points.spent += 1; target.collection.points.balance -= 1; target.revision += 1; server.drawWrites += 1;
         if (server.failDrawAfterCommit) { server.failDrawAfterCommit = false; throw new Error('connection lost after commit'); }
       }
-      response = { ...clone(server.state), draw: clone(drawReceipts.get(body.requestId)) };
+      response = { ...decorate(target), draw: clone(drawReceipts.get(body.requestId)) };
     } else if (options.method === 'POST') {
       if (server.failPost) return { ok: false, status: 409, json: async () => ({ error: server.failPost }) };
       const body = JSON.parse(options.body);
-      if (path === '/preferences') server.state.preferences = { ...server.state.preferences, ...body };
+      if (path === '/preferences') target.preferences = { ...target.preferences, ...body };
       if (path === '/equip') {
-        if (body.slot === 'character') server.state.equipment.character = body.equipped === false ? null : body.id;
-        else if (body.slot === 'charm') server.state.equipment.charm = body.equipped === false ? null : body.id;
-        else server.state.equipment.badges = body.equipped === false ? [] : [body.id];
+        if (body.slot === 'character') target.equipment.character = body.equipped === false ? null : body.id;
+        else if (body.slot === 'charm') target.equipment.charm = body.equipped === false ? null : body.id;
+        else target.equipment.badges = body.equipped === false ? [] : [body.id];
       }
-      if (path === '/configure') server.state.definitions = server.state.definitions.map(item => body.archiveIds?.includes(item.id) ? { ...item, status: 'archived' } : item);
+      if (path === '/configure') target.definitions = target.definitions.map(item => body.archiveIds?.includes(item.id) ? { ...item, status: 'archived' } : item);
       if (path === '/characters') for (const declared of body.characters) {
-        const previous = server.state.collection.characters.find(item => item.id === declared.id);
+        const previous = target.collection.characters.find(item => item.id === declared.id);
         if (previous) Object.assign(previous, declared);
-        else server.state.collection.characters.push({ ...declared, id: `user-${++nextId}`, source: 'user' });
+        else target.collection.characters.push({ ...declared, id: `user-${++nextId}`, source: 'user' });
       }
-      server.state.revision += 1;
-      response = clone(server.state);
+      target.revision += 1;
+      response = decorate(target);
     } else throw new Error(`Unexpected request ${url}`);
     return { ok: true, status: 200, json: async () => response };
   }
-  vm.runInNewContext(source, { window, document, fetch, AbortController, setTimeout: timer, clearTimeout: clear, console });
+  const compiled = source.replace("'__ACHIEVEMENT_PORTRAITS__'", JSON.stringify(options.portraits ?? { version: 1, themes: {} }));
+  vm.runInNewContext(compiled, { window, document, fetch, AbortController, setTimeout: timer, clearTimeout: clear, console });
   assert.equal(registration.id, 'dsh-achievement-journal');
   const plugin = registration.factory(name => {
     required.push(name);
@@ -332,7 +373,7 @@ test('preferences and equipment save through the API and failures preserve the s
 test('one-click generation submits selected real sources and applies only the successful job result', async t => {
   const app = harness(journal(), { sessionKey: 'session:fixture' }); t.after(() => app.cleanup()); await app.ready();
   assert.ok(app.requests.some(item => item.url.endsWith('/catalog?sessionId=session%3Afixture')));
-  app.click('打开成就中心'); app.click('模型配置');
+  app.click('打开成就中心'); app.click('自定义生成');
   assert.doesNotMatch(app.textContent(), /复制给模型|粘贴发送/);
   assert.ok(!app.nodes().some(node => node.props?.id === 'daj-metric-recipe'));
   app.change('daj-metric-tokens', false);
@@ -360,7 +401,7 @@ test('one-click generation submits selected real sources and applies only the su
 
 test('generation unavailable, failed and cancelled states do not invent saved achievements', async t => {
   const app = harness(journal(), { generation: { available: false, reason: '请先配置默认模型' } }); t.after(() => app.cleanup());
-  await app.ready(); app.click('打开成就中心'); app.click('模型配置');
+  await app.ready(); app.click('打开成就中心'); app.click('自定义生成');
   assert.match(app.textContent(), /请先配置默认模型/);
   assert.equal(app.nodes().find(node => node.type === 'button' && app.textContent(node).trim() === '分析并生成成就').props.disabled, true);
   assert.equal(app.requests.filter(item => item.url.endsWith('/generation') && item.options.method === 'POST').length, 0);
@@ -377,7 +418,7 @@ test('generation unavailable, failed and cancelled states do not invent saved ac
 
 test('source connectivity filters defaults, select-all and generation after active scope changes', async t => {
   const app = harness(journal(), { capabilities: { sources: [{ kind: 'tokens', connected: true }, { kind: 'file_read', connected: false }] } });
-  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('模型配置');
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('自定义生成');
   const field = id => app.nodes().find(node => node.props?.id === 'daj-metric-' + id);
   assert.equal(field('tokens').props.checked, true);
   assert.equal(field('file_read').props.checked, false); assert.equal(field('file_read').props.disabled, true);
@@ -398,7 +439,7 @@ test('optional Cordis session service uses get without touching a guarded proper
   assert.ok(app.requests.some(item => item.url.endsWith('/catalog?sessionId=session%3Afirst')));
   app.session('session:second'); await app.ready();
   assert.ok(app.requests.some(item => item.url.endsWith('/catalog?sessionId=session%3Asecond')));
-  app.click('打开成就中心'); app.click('模型配置'); app.click('分析并生成成就'); await app.ready();
+  app.click('打开成就中心'); app.click('自定义生成'); app.click('分析并生成成就'); await app.ready();
   const submitted = JSON.parse(app.requests.find(item => item.url.endsWith('/generation') && item.options.method === 'POST').options.body);
   assert.equal(submitted.sessionId, 'session:second'); assert.equal(app.server.uiSessionGetterReads, 0);
 });
@@ -407,10 +448,10 @@ test('running generation restores independently of the open page and default rou
   const restored = { id: 'restored-job', status: 'running', stage: 'generating', message: '仍在生成中', createdAt: 1, updatedAt: 2, createdDefinitionIds: [] };
   const app = harness(journal(), { job: restored, strictServices: true, sessionKey: { private: 'not-a-session-id' } }); t.after(() => app.cleanup()); await app.ready();
   assert.ok(app.requests.some(item => item.url.endsWith('/generation'))); assert.ok(!app.requests.some(item => item.url.includes('sessionId=')));
-  app.click('打开成就中心'); app.click('模型配置'); assert.match(app.textContent(), /仍在生成中/);
+  app.click('打开成就中心'); app.click('自定义生成'); assert.match(app.textContent(), /仍在生成中/);
   app.key('Escape'); app.server.job = { ...app.server.job, status: 'cancelled', stage: 'done', updatedAt: 3 };
   await app.advance(1200); assert.equal(app.state().generationJob.status, 'cancelled');
-  app.click('打开成就中心'); app.click('模型配置'); app.click('分析并生成成就'); await app.ready();
+  app.click('打开成就中心'); app.click('自定义生成'); app.click('分析并生成成就'); await app.ready();
   const submitted = JSON.parse(app.requests.find(item => item.url.endsWith('/generation') && item.options.method === 'POST').options.body);
   assert.equal('sessionId' in submitted, false);
 });
@@ -517,6 +558,97 @@ test('full custom pool blocks model and manual creation while keeping existing c
   app.click('返回角色收藏'); app.click('全部卡池'); app.click('编辑角色 已有同伴');
   app.change('daj-character-name', '改名后的同伴'); app.click('保存角色外观'); await app.ready();
   assert.equal(app.state().data.collection.characters.find(item => item.id === 'custom').name, '改名后的同伴');
+});
+
+test('debug actions stay isolated, disable model requests, rotate reset tokens and restore real state on explicit exit', async t => {
+  const real = journal({ totals: { tokens: 900, turns: 3 } });
+  const app = harness(real); t.after(() => app.cleanup()); await app.ready();
+  app.click('进入调试模式'); await app.ready();
+  const firstToken = app.storage.get('dsh-achievement-journal.debug');
+  assert.ok(firstToken); assert.equal(app.state().debugActive, true); assert.equal(app.state().data.totals.tokens, 0);
+  assert.equal(app.requests.find(item => item.url.endsWith('/debug/start')).options.headers['x-daj-debug'], undefined);
+  assert.ok(app.nodes().some(node => node.props?.className === 'daj-debug-banner'));
+  assert.ok(app.nodes().some(node => node.props?.className === 'daj-frame-debug-label'));
+  app.change('daj-settings-theme', 'garden'); await app.ready();
+  assert.equal(app.server.debugStates.get(firstToken).preferences.theme, 'garden'); assert.equal(app.server.state.preferences.theme, 'explorer');
+  app.click('完成所选成就'); await app.ready(); assert.equal(app.state().data.awards.length, 1);
+  app.click('加一个挂件'); await app.ready(); assert.equal(app.state().data.equipment.charm, 'star');
+  app.click('调试十连并佩戴'); await app.ready();
+  assert.equal(app.state().data.equipment.character, 'hero'); assert.equal(app.state().drawReceipt.results.length, 10);
+  assert.equal(app.state().tab, 'characters'); assert.match(app.textContent(), /独立临时数据/);
+  app.click('创作角色');
+  const modelButton = app.nodes().find(node => node.type === 'button' && app.textContent(node).trim() === '模型生成角色');
+  assert.equal(modelButton.props.disabled, true); modelButton.props.onClick(); await app.ready();
+  assert.equal(app.requests.filter(item => item.url.endsWith('/generation') && item.options.method === 'POST').length, 0);
+  app.click('重置调试数据'); await app.ready();
+  const secondToken = app.storage.get('dsh-achievement-journal.debug');
+  assert.notEqual(secondToken, firstToken); assert.equal(app.server.debugStates.has(firstToken), false); assert.equal(app.state().data.awards.length, 0);
+  assert.equal(app.requests.find(item => item.url.endsWith('/debug/reset')).options.headers['x-daj-debug'], firstToken);
+  app.click('退出调试'); await app.ready();
+  assert.equal(app.storage.has('dsh-achievement-journal.debug'), false); assert.equal(app.state().debugActive, false);
+  assert.equal(app.state().data.totals.tokens, 900); assert.deepEqual(app.server.state, real);
+  assert.ok(!app.nodes().some(node => node.props?.className === 'daj-debug-banner'));
+});
+
+test('expired debug scope remains explicit, prevents writes and never retries against real state', async t => {
+  const app = harness(); t.after(() => app.cleanup()); await app.ready(); app.click('进入调试模式'); await app.ready();
+  const token = app.storage.get('dsh-achievement-journal.debug'); app.server.debugStates.delete(token);
+  const beforeExpiry = app.requests.length;
+  await app.advance(1800); app.render();
+  assert.equal(app.state().debugActive, true); assert.equal(app.state().debugExpired, true); assert.equal(app.state().busy, true);
+  assert.equal(app.storage.get('dsh-achievement-journal.debug'), token);
+  assert.match(app.textContent(), /未切回真实数据/);
+  const beforeWrite = app.requests.length;
+  app.change('daj-settings-theme', 'cyber'); await app.ready();
+  assert.equal(app.requests.length, beforeWrite); assert.equal(app.server.state.preferences.theme, 'explorer');
+  assert.ok(app.requests.slice(beforeExpiry).every(item => item.options.headers['x-daj-debug'] === token));
+  app.click('退出调试'); await app.ready(); assert.equal(app.state().debugActive, false);
+  app.change('daj-settings-theme', 'cyber'); await app.ready();
+  assert.equal(app.server.state.preferences.theme, 'cyber'); assert.equal(app.requests.at(-1).options.headers['x-daj-debug'], undefined);
+});
+
+test('mode switches discard late state responses in both directions and clear a previous draw retry', async t => {
+  const storage = new Map([['dsh-achievement-journal.draw', JSON.stringify({ id: 'old-real-draw', theme: 'explorer', scope: 'real' })]]);
+  const app = harness(journal({ totals: { tokens: 500, turns: 1 } }), { storage }); t.after(() => app.cleanup()); await app.ready();
+  assert.equal(app.state().drawRetry, true);
+  app.server.ignoreStateAbort = true; app.server.deferNextState = true; await app.advance(1800);
+  const releaseReal = app.server.releaseState;
+  app.click('进入调试模式'); await app.ready();
+  assert.equal(app.state().drawRetry, false); assert.equal(storage.has('dsh-achievement-journal.draw'), false);
+  releaseReal(); await app.ready(); assert.equal(app.state().debugActive, true); assert.equal(app.state().data.totals.tokens, 0);
+  app.server.deferNextState = true; await app.advance(1800); const releaseDebug = app.server.releaseState;
+  app.server.state.totals.tokens = 700;
+  app.click('退出调试'); await app.ready(); releaseDebug(); await app.ready();
+  assert.equal(app.state().debugActive, false); assert.equal(app.state().data.totals.tokens, 700);
+  assert.equal(app.state().data.debug.active, false);
+});
+
+test('portrait atlas uses the exact cell crop, user art takes priority and loading failures fall back', async t => {
+  const url = '/dsh-achievement-journal/api/assets/portraits/explorer.webp?version=abc123def456';
+  const portraits = { version: 1, themes: { explorer: { url, columns: 4, rows: 2, aspect: .75, characters: [{ id: 'hero', name: '山海小狐', icon: 'fox', column: 2, row: 1 }] } } };
+  const state = journal({ equipment: { badges: [], charm: null, character: 'hero' }, collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [character()], owned: [{ id: 'hero', count: 1, firstAt: 1 }], draws: [] } });
+  const app = harness(state, { portraits }); t.after(() => app.cleanup()); await app.ready();
+  let sprite = app.nodes().find(node => node.props?.className === 'daj-character-portrait');
+  assert.ok(sprite); assert.equal(sprite.props.style.backgroundSize, '400% 200%'); assert.match(sprite.props.style.backgroundPosition, /^66\.666.*% 100%$/);
+  assert.equal(sprite.props.style.backgroundImage, `url("${url}")`);
+  assert.ok(app.nodes().some(node => node.props?.['data-animation'] === 'float'));
+  app.server.state.collection.characters[0].art = PIXEL_PNG; app.server.state.revision += 1; await app.advance(1800);
+  assert.ok(app.nodes().some(node => node.type === 'img' && node.props.src === PIXEL_PNG));
+  assert.ok(!app.nodes().some(node => node.props?.className === 'daj-character-portrait'));
+  const failed = harness(state, { portraits, imageErrors: [url] }); t.after(() => failed.cleanup()); await failed.ready();
+  assert.ok(!failed.nodes().some(node => node.props?.className === 'daj-character-portrait'));
+  assert.ok(failed.nodes().some(node => node.type === 'svg' && node.props.viewBox === '0 0 140 160'));
+});
+
+test('every drawn card exposes an immediate equip action and the frame shows the current character', async t => {
+  const receipt = { requestId: 'saved-draw', theme: 'explorer', at: 200, cost: 1, results: Array.from({ length: 10 }, (_, index) => ({ id: 'hero', rarity: 'SR', isNew: index === 0 })) };
+  const app = harness(journal({ collection: { points: { earned: 1, spent: 1, balance: 0 }, characters: [character()], owned: [{ id: 'hero', count: 10, firstAt: 200 }], draws: [receipt] } }));
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏');
+  const actions = app.nodes().filter(node => node.type === 'button' && node.props['aria-label'] === '佩戴到成就框 山海小狐');
+  assert.equal(actions.length, 10); app.click('佩戴到成就框 山海小狐'); await app.ready();
+  assert.equal(app.state().data.equipment.character, 'hero');
+  assert.ok(app.nodes().some(node => node.props?.className === 'daj-frame-change' && app.textContent(node) === '更换'));
+  assert.ok(app.nodes().filter(node => node.type === 'button' && node.props['aria-label'] === '佩戴到成就框 山海小狐').every(node => node.props.disabled));
 });
 
 test('feedback preferences take effect immediately and preview never writes real achievements', async t => {

@@ -1,0 +1,46 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createServer } from 'node:http';
+import { once } from 'node:events';
+const target=process.env.JOURNAL_ARTIFACT?new URL(`file://${process.env.JOURNAL_ARTIFACT}/lib/index.mjs`):new URL('../src/index.mjs',import.meta.url);
+const {createAchievementJournal}=await import(target);
+
+test('browser debug scope isolates all writes, refuses generation and never falls through after reset or exit',async t=>{
+  const dir=await mkdtemp(join(tmpdir(),'achievement-debug-http-')),file=join(dir,'journal.json');let handler,modelRequests=0;
+  const ctx={sessions:{},logger:{warn(){}},on:()=>()=>{},llm:{prepareCall(){modelRequests++;throw new Error('No debug model calls');}},
+    webServer:{register(route){handler=route.handler;return()=>{};}},
+    connection:{browserPeer:{id:'browser'},admit(req){return req.headers['x-fixture-peer']==='browser'?{peer:{id:'browser'}}:{rejection:401};}}};
+  const service=await createAchievementJournal(ctx,{statePath:file,collect:false,registerTools:false});
+  const server=createServer((req,res)=>void handler(req,res));server.listen(0,'127.0.0.1');await once(server,'listening');
+  t.after(async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));await service.dispose();await rm(dir,{recursive:true,force:true});});
+  const base=`http://127.0.0.1:${server.address().port}/dsh-achievement-journal/api`;
+  const request=(path,body,token,extra={})=>fetch(base+path,{headers:{'x-fixture-peer':'browser',...(body===undefined?{}:{'content-type':'application/json'}),...(token?{'x-daj-debug':token}:{}),...extra},...(body===undefined?{}:{method:'POST',body:JSON.stringify(body)})});
+  const initial=await(await request('/state')).json(),bytes=await readFile(file);assert.equal(initial.debug.active,false);
+  assert.equal((await fetch(base+'/debug/start',{method:'POST'})).status,401);
+  assert.equal((await request('/debug/start',{},undefined,{origin:'https://other.invalid'})).status,403);
+  assert.equal((await request('/debug/action',{requestId:'missing-scope',action:'draw',theme:'xianxia'})).status,409);
+  const start=await(await request('/debug/start',{})).json();assert.ok(start.token);assert.equal(start.snapshot.debug.active,true);
+  const completed=await(await request('/debug/action',{requestId:'complete-1',action:'complete'},start.token)).json();
+  assert.equal(completed.collection.points.balance,initial.collection.points.balance+1);
+  const drawn=await(await request('/debug/action',{requestId:'draw-1',action:'draw',theme:'xianxia'},start.token)).json();
+  assert.equal(drawn.draw.results.length,10);assert.ok(drawn.equipment.character);assert.equal(drawn.collection.points.spent,1);
+  const retried=await(await request('/debug/action',{requestId:'draw-1',action:'draw',theme:'xianxia'},start.token)).json();assert.deepEqual(retried.draw,drawn.draw);assert.equal(retried.collection.points.spent,1);
+  const charm=await(await request('/debug/action',{requestId:'charm-1',action:'charm',charm:'leaf'},start.token)).json();assert.equal(charm.equipment.charm,'leaf');
+  const changed=await(await request('/preferences',{theme:'cyber',frameHeight:104},start.token)).json();assert.equal(changed.preferences.theme,'cyber');assert.equal(changed.preferences.frameHeight,104);
+  const generation=await request('/generation',{requestId:'no-model',kind:'characters',theme:'cyber'},start.token);assert.equal(generation.status,409);assert.equal((await generation.json()).code,'DEBUG_GENERATION_DISABLED');assert.equal(modelRequests,0);
+  assert.equal((await(await request('/catalog',undefined,start.token)).json()).generation.available,false);
+  assert.equal((await(await request('/generation',undefined,start.token)).json()).job,null);
+  assert.deepEqual(await readFile(file),bytes,'Debug complete/draw/charm/preferences do not write real bytes');
+  const real=await(await request('/state')).json();assert.deepEqual(real.awards,initial.awards);assert.deepEqual(real.collection,initial.collection);assert.deepEqual(real.notifications,[]);
+  await service.journal.ingest([{id:'real-work-during-debug',kind:'turn_completed',at:Date.now(),sessionId:'real-work',turnKey:'real-turn'}]);
+  const work=await(await request('/state')).json();assert.equal(work.totals.turns,1);const workedBytes=await readFile(file);
+  const reset=await(await request('/debug/reset',{},start.token)).json();assert.notEqual(reset.token,start.token);assert.equal(reset.snapshot.totals.turns,1);assert.deepEqual(reset.snapshot.awards,work.awards);assert.deepEqual(reset.snapshot.collection.owned,work.collection.owned);
+  const stale=await request('/equip',{id:'star',slot:'charm',equipped:true},start.token);assert.equal(stale.status,409);assert.equal((await stale.json()).code,'DEBUG_SCOPE_EXPIRED');
+  assert.equal((await request('/state',undefined,'unknown-scope')).status,409);
+  assert.equal((await request('/debug/exit',{},start.token)).status,200);assert.equal((await request('/state',undefined,reset.token)).status,200);
+  assert.equal((await request('/debug/exit',{},reset.token)).status,200);assert.equal((await request('/state',undefined,reset.token)).status,409);
+  assert.equal((await(await request('/state')).json()).debug.active,false);assert.deepEqual(await readFile(file),workedBytes);assert.equal(service.debug.diagnostics().activeSessions,0);
+});

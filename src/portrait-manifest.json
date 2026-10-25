@@ -1,0 +1,695 @@
+{
+  "version": 1,
+  "themes": {
+    "explorer": {
+      "file": "explorer.webp",
+      "url": "/dsh-achievement-journal/api/assets/portraits/explorer.webp?version=d0de7f564377",
+      "columns": 4,
+      "rows": 2,
+      "aspect": 1,
+      "characters": [
+        {
+          "id": "builtin:explorer:1",
+          "name": "森径信使",
+          "icon": "leaf",
+          "column": 0,
+          "row": 0
+        },
+        {
+          "id": "builtin:explorer:2",
+          "name": "砂岩画师",
+          "icon": "book",
+          "column": 1,
+          "row": 0
+        },
+        {
+          "id": "builtin:explorer:3",
+          "name": "云谷背包客",
+          "icon": "compass",
+          "column": 2,
+          "row": 0
+        },
+        {
+          "id": "builtin:explorer:4",
+          "name": "寻星观测员",
+          "icon": "star",
+          "column": 3,
+          "row": 0
+        },
+        {
+          "id": "builtin:explorer:5",
+          "name": "极光领航员",
+          "icon": "flag",
+          "column": 0,
+          "row": 1
+        },
+        {
+          "id": "builtin:explorer:6",
+          "name": "旧图修补匠",
+          "icon": "book",
+          "column": 1,
+          "row": 1
+        },
+        {
+          "id": "builtin:explorer:7",
+          "name": "山海绘卷师",
+          "icon": "medal",
+          "column": 2,
+          "row": 1
+        },
+        {
+          "id": "builtin:explorer:8",
+          "name": "黎明远行者",
+          "icon": "compass",
+          "column": 3,
+          "row": 1
+        }
+      ],
+      "width": 1280,
+      "height": 640,
+      "bytes": 380092,
+      "sha256": "d0de7f564377711628f3a909240f26201875762e325330f8333d9f1f0d8d8522"
+    },
+    "xianxia": {
+      "file": "xianxia.webp",
+      "url": "/dsh-achievement-journal/api/assets/portraits/xianxia.webp?version=367c85c27ef6",
+      "columns": 4,
+      "rows": 2,
+      "aspect": 1,
+      "characters": [
+        {
+          "id": "builtin:xianxia:1",
+          "name": "青苔童子",
+          "icon": "leaf",
+          "column": 0,
+          "row": 0
+        },
+        {
+          "id": "builtin:xianxia:2",
+          "name": "灵泉采药人",
+          "icon": "lotus",
+          "column": 1,
+          "row": 0
+        },
+        {
+          "id": "builtin:xianxia:3",
+          "name": "松烟符徒",
+          "icon": "book",
+          "column": 2,
+          "row": 0
+        },
+        {
+          "id": "builtin:xianxia:4",
+          "name": "听雨剑修",
+          "icon": "sword",
+          "column": 3,
+          "row": 0
+        },
+        {
+          "id": "builtin:xianxia:5",
+          "name": "白羽丹师",
+          "icon": "orb",
+          "column": 0,
+          "row": 1
+        },
+        {
+          "id": "builtin:xianxia:6",
+          "name": "逐月灵狐",
+          "icon": "fox",
+          "column": 1,
+          "row": 1
+        },
+        {
+          "id": "builtin:xianxia:7",
+          "name": "莲台御风客",
+          "icon": "lotus",
+          "column": 2,
+          "row": 1
+        },
+        {
+          "id": "builtin:xianxia:8",
+          "name": "九霄星君",
+          "icon": "dragon",
+          "column": 3,
+          "row": 1
+        }
+      ],
+      "width": 1280,
+      "height": 640,
+      "bytes": 381696,
+      "sha256": "367c85c27ef67873c266061c5425def53b788671bf248a83926652ced796c11d"
+    },
+    "cyber": {
+      "file": "cyber.webp",
+      "url": "/dsh-achievement-journal/api/assets/portraits/cyber.webp?version=94e65417145b",
+      "columns": 4,
+      "rows": 2,
+      "aspect": 1,
+      "characters": [
+        {
+          "id": "builtin:cyber:1",
+          "name": "巷灯巡线员",
+          "icon": "code",
+          "column": 0,
+          "row": 0
+        },
+        {
+          "id": "builtin:cyber:2",
+          "name": "字节园丁",
+          "icon": "leaf",
+          "column": 1,
+          "row": 0
+        },
+        {
+          "id": "builtin:cyber:3",
+          "name": "回声信使",
+          "icon": "chat",
+          "column": 2,
+          "row": 0
+        },
+        {
+          "id": "builtin:cyber:4",
+          "name": "霓虹译码师",
+          "icon": "code",
+          "column": 3,
+          "row": 0
+        },
+        {
+          "id": "builtin:cyber:5",
+          "name": "银翼守夜人",
+          "icon": "robot",
+          "column": 0,
+          "row": 1
+        },
+        {
+          "id": "builtin:cyber:6",
+          "name": "合成猫侦探",
+          "icon": "cat",
+          "column": 1,
+          "row": 1
+        },
+        {
+          "id": "builtin:cyber:7",
+          "name": "量子观测者",
+          "icon": "orb",
+          "column": 2,
+          "row": 1
+        },
+        {
+          "id": "builtin:cyber:8",
+          "name": "黎明协议主",
+          "icon": "robot",
+          "column": 3,
+          "row": 1
+        }
+      ],
+      "width": 1280,
+      "height": 640,
+      "bytes": 355566,
+      "sha256": "94e65417145bf67463d8c5469774c66312e5ad0ac42e16ba47ddf4ce6cd88847"
+    },
+    "wuxia": {
+      "file": "wuxia.webp",
+      "url": "/dsh-achievement-journal/api/assets/portraits/wuxia.webp?version=2bb74790e0da",
+      "columns": 4,
+      "rows": 2,
+      "aspect": 1,
+      "characters": [
+        {
+          "id": "builtin:wuxia:1",
+          "name": "竹篱药童",
+          "icon": "leaf",
+          "column": 0,
+          "row": 0
+        },
+        {
+          "id": "builtin:wuxia:2",
+          "name": "渡口说书人",
+          "icon": "book",
+          "column": 1,
+          "row": 0
+        },
+        {
+          "id": "builtin:wuxia:3",
+          "name": "青衫镖客",
+          "icon": "flag",
+          "column": 2,
+          "row": 0
+        },
+        {
+          "id": "builtin:wuxia:4",
+          "name": "听雪剑客",
+          "icon": "sword",
+          "column": 3,
+          "row": 0
+        },
+        {
+          "id": "builtin:wuxia:5",
+          "name": "流霞琴师",
+          "icon": "lotus",
+          "column": 0,
+          "row": 1
+        },
+        {
+          "id": "builtin:wuxia:6",
+          "name": "归雁游侠",
+          "icon": "feather",
+          "column": 1,
+          "row": 1
+        },
+        {
+          "id": "builtin:wuxia:7",
+          "name": "踏月刀隐",
+          "icon": "moon",
+          "column": 2,
+          "row": 1
+        },
+        {
+          "id": "builtin:wuxia:8",
+          "name": "无尘宗师",
+          "icon": "sword",
+          "column": 3,
+          "row": 1
+        }
+      ],
+      "width": 1280,
+      "height": 640,
+      "bytes": 387690,
+      "sha256": "2bb74790e0da73dd74a2d8cf606c091ba3ec8791687b2839eb2db416dfc82363"
+    },
+    "fantasy": {
+      "file": "fantasy.webp",
+      "url": "/dsh-achievement-journal/api/assets/portraits/fantasy.webp?version=5ff0a361ba46",
+      "columns": 4,
+      "rows": 2,
+      "aspect": 1,
+      "characters": [
+        {
+          "id": "builtin:fantasy:1",
+          "name": "苔原侏儒",
+          "icon": "gear",
+          "column": 0,
+          "row": 0
+        },
+        {
+          "id": "builtin:fantasy:2",
+          "name": "烛光学徒",
+          "icon": "lantern",
+          "column": 1,
+          "row": 0
+        },
+        {
+          "id": "builtin:fantasy:3",
+          "name": "铃鹿斥候",
+          "icon": "leaf",
+          "column": 2,
+          "row": 0
+        },
+        {
+          "id": "builtin:fantasy:4",
+          "name": "银叶德鲁伊",
+          "icon": "leaf",
+          "column": 3,
+          "row": 0
+        },
+        {
+          "id": "builtin:fantasy:5",
+          "name": "星火骑士",
+          "icon": "sword",
+          "column": 0,
+          "row": 1
+        },
+        {
+          "id": "builtin:fantasy:6",
+          "name": "月泉魔导师",
+          "icon": "orb",
+          "column": 1,
+          "row": 1
+        },
+        {
+          "id": "builtin:fantasy:7",
+          "name": "秘境龙语者",
+          "icon": "book",
+          "column": 2,
+          "row": 1
+        },
+        {
+          "id": "builtin:fantasy:8",
+          "name": "晨曦守誓龙",
+          "icon": "dragon",
+          "column": 3,
+          "row": 1
+        }
+      ],
+      "width": 1280,
+      "height": 640,
+      "bytes": 350490,
+      "sha256": "5ff0a361ba4682d08a716e12d6838864f7ccfa2aa2f0a5db08ab760a585454aa"
+    },
+    "space": {
+      "file": "space.webp",
+      "url": "/dsh-achievement-journal/api/assets/portraits/space.webp?version=7697d4c3ea8f",
+      "columns": 4,
+      "rows": 2,
+      "aspect": 1,
+      "characters": [
+        {
+          "id": "builtin:space:1",
+          "name": "舷窗记录员",
+          "icon": "book",
+          "column": 0,
+          "row": 0
+        },
+        {
+          "id": "builtin:space:2",
+          "name": "陨石采样员",
+          "icon": "orb",
+          "column": 1,
+          "row": 0
+        },
+        {
+          "id": "builtin:space:3",
+          "name": "轨道修理工",
+          "icon": "gear",
+          "column": 2,
+          "row": 0
+        },
+        {
+          "id": "builtin:space:4",
+          "name": "苍蓝导航官",
+          "icon": "compass",
+          "column": 3,
+          "row": 0
+        },
+        {
+          "id": "builtin:space:5",
+          "name": "深空信号师",
+          "icon": "chat",
+          "column": 0,
+          "row": 1
+        },
+        {
+          "id": "builtin:space:6",
+          "name": "星尘测绘员",
+          "icon": "star",
+          "column": 1,
+          "row": 1
+        },
+        {
+          "id": "builtin:space:7",
+          "name": "折光跃迁者",
+          "icon": "ship",
+          "column": 2,
+          "row": 1
+        },
+        {
+          "id": "builtin:space:8",
+          "name": "群星引航者",
+          "icon": "ship",
+          "column": 3,
+          "row": 1
+        }
+      ],
+      "width": 1280,
+      "height": 640,
+      "bytes": 364750,
+      "sha256": "7697d4c3ea8fe330bf890052e0c663bf9a969b1f957db3af49c3ef883fa05148"
+    },
+    "ocean": {
+      "file": "ocean.webp",
+      "url": "/dsh-achievement-journal/api/assets/portraits/ocean.webp?version=4b076f719dc2",
+      "columns": 4,
+      "rows": 2,
+      "aspect": 1,
+      "characters": [
+        {
+          "id": "builtin:ocean:1",
+          "name": "潮汐拾贝人",
+          "icon": "shell",
+          "column": 0,
+          "row": 0
+        },
+        {
+          "id": "builtin:ocean:2",
+          "name": "珊瑚信使",
+          "icon": "chat",
+          "column": 1,
+          "row": 0
+        },
+        {
+          "id": "builtin:ocean:3",
+          "name": "礁影潜行者",
+          "icon": "compass",
+          "column": 2,
+          "row": 0
+        },
+        {
+          "id": "builtin:ocean:4",
+          "name": "月湾领航员",
+          "icon": "ship",
+          "column": 3,
+          "row": 0
+        },
+        {
+          "id": "builtin:ocean:5",
+          "name": "珍珠守望者",
+          "icon": "orb",
+          "column": 0,
+          "row": 1
+        },
+        {
+          "id": "builtin:ocean:6",
+          "name": "海雾歌者",
+          "icon": "shell",
+          "column": 1,
+          "row": 1
+        },
+        {
+          "id": "builtin:ocean:7",
+          "name": "蓝渊探秘师",
+          "icon": "medal",
+          "column": 2,
+          "row": 1
+        },
+        {
+          "id": "builtin:ocean:8",
+          "name": "万潮御鲸者",
+          "icon": "dragon",
+          "column": 3,
+          "row": 1
+        }
+      ],
+      "width": 1024,
+      "height": 512,
+      "bytes": 278390,
+      "sha256": "4b076f719dc29a08fd9d2e38bd46ba5a3e4a76f43f4f963ccfda5bb0a21660b8"
+    },
+    "garden": {
+      "file": "garden.webp",
+      "url": "/dsh-achievement-journal/api/assets/portraits/garden.webp?version=f5e5f33f70fe",
+      "columns": 4,
+      "rows": 2,
+      "aspect": 1,
+      "characters": [
+        {
+          "id": "builtin:garden:1",
+          "name": "晨露植苗员",
+          "icon": "leaf",
+          "column": 0,
+          "row": 0
+        },
+        {
+          "id": "builtin:garden:2",
+          "name": "青叶邮差",
+          "icon": "chat",
+          "column": 1,
+          "row": 0
+        },
+        {
+          "id": "builtin:garden:3",
+          "name": "小径蘑菇匠",
+          "icon": "flower",
+          "column": 2,
+          "row": 0
+        },
+        {
+          "id": "builtin:garden:4",
+          "name": "月季调香师",
+          "icon": "flower",
+          "column": 3,
+          "row": 0
+        },
+        {
+          "id": "builtin:garden:5",
+          "name": "蕨影护林人",
+          "icon": "leaf",
+          "column": 0,
+          "row": 1
+        },
+        {
+          "id": "builtin:garden:6",
+          "name": "蜂语花匠",
+          "icon": "spark",
+          "column": 1,
+          "row": 1
+        },
+        {
+          "id": "builtin:garden:7",
+          "name": "流萤造景师",
+          "icon": "lantern",
+          "column": 2,
+          "row": 1
+        },
+        {
+          "id": "builtin:garden:8",
+          "name": "四季森灵",
+          "icon": "flower",
+          "column": 3,
+          "row": 1
+        }
+      ],
+      "width": 1280,
+      "height": 640,
+      "bytes": 371422,
+      "sha256": "f5e5f33f70fe097aaf22aa85d1d4f2dbd762a81a730759a80c5e934831e5e622"
+    },
+    "academy": {
+      "file": "academy.webp",
+      "url": "/dsh-achievement-journal/api/assets/portraits/academy.webp?version=ac8c8b1907c6",
+      "columns": 4,
+      "rows": 2,
+      "aspect": 1,
+      "characters": [
+        {
+          "id": "builtin:academy:1",
+          "name": "墨羽抄录生",
+          "icon": "feather",
+          "column": 0,
+          "row": 0
+        },
+        {
+          "id": "builtin:academy:2",
+          "name": "钟楼值日生",
+          "icon": "gear",
+          "column": 1,
+          "row": 0
+        },
+        {
+          "id": "builtin:academy:3",
+          "name": "银页图书员",
+          "icon": "book",
+          "column": 2,
+          "row": 0
+        },
+        {
+          "id": "builtin:academy:4",
+          "name": "星算研究员",
+          "icon": "star",
+          "column": 3,
+          "row": 0
+        },
+        {
+          "id": "builtin:academy:5",
+          "name": "烛台辩论家",
+          "icon": "lantern",
+          "column": 0,
+          "row": 1
+        },
+        {
+          "id": "builtin:academy:6",
+          "name": "羽笔咒学师",
+          "icon": "feather",
+          "column": 1,
+          "row": 1
+        },
+        {
+          "id": "builtin:academy:7",
+          "name": "万卷巡阅者",
+          "icon": "owl",
+          "column": 2,
+          "row": 1
+        },
+        {
+          "id": "builtin:academy:8",
+          "name": "穹顶贤者",
+          "icon": "book",
+          "column": 3,
+          "row": 1
+        }
+      ],
+      "width": 1280,
+      "height": 640,
+      "bytes": 388660,
+      "sha256": "ac8c8b1907c6f8c59f4d5a4cc8d920d5f69429e16f3c5861475fe02ddf1cec45"
+    },
+    "steampunk": {
+      "file": "steampunk.webp",
+      "url": "/dsh-achievement-journal/api/assets/portraits/steampunk.webp?version=a632d4df827c",
+      "columns": 4,
+      "rows": 2,
+      "aspect": 1,
+      "characters": [
+        {
+          "id": "builtin:steampunk:1",
+          "name": "煤灯调试员",
+          "icon": "lantern",
+          "column": 0,
+          "row": 0
+        },
+        {
+          "id": "builtin:steampunk:2",
+          "name": "铜壳跑腿机",
+          "icon": "robot",
+          "column": 1,
+          "row": 0
+        },
+        {
+          "id": "builtin:steampunk:3",
+          "name": "铆钉制图生",
+          "icon": "book",
+          "column": 2,
+          "row": 0
+        },
+        {
+          "id": "builtin:steampunk:4",
+          "name": "黄铜飞艇长",
+          "icon": "ship",
+          "column": 3,
+          "row": 0
+        },
+        {
+          "id": "builtin:steampunk:5",
+          "name": "齿轮钟匠",
+          "icon": "gear",
+          "column": 0,
+          "row": 1
+        },
+        {
+          "id": "builtin:steampunk:6",
+          "name": "蒸汽花园师",
+          "icon": "flower",
+          "column": 1,
+          "row": 1
+        },
+        {
+          "id": "builtin:steampunk:7",
+          "name": "逆风机械师",
+          "icon": "gear",
+          "column": 2,
+          "row": 1
+        },
+        {
+          "id": "builtin:steampunk:8",
+          "name": "永昼动力心",
+          "icon": "orb",
+          "column": 3,
+          "row": 1
+        }
+      ],
+      "width": 1280,
+      "height": 640,
+      "bytes": 353816,
+      "sha256": "a632d4df827c1ff9292aec81389a7fec4fa24dfa428bd74785bd3bef6ab5a193"
+    }
+  }
+}

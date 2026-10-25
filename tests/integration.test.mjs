@@ -59,6 +59,8 @@ test('native AgentLoop → real tools → journal: model config, file sequence, 
     prepareExtensions: async () => ({ fields: {}, accept: async () => {} }),
   }));
   service = await createAchievementJournal(ctx, { statePath: join(dir, 'journal/state.json'), registerHttp: false });
+  const debugScope = await service.debug.start();
+  const debugBaseline = service.debug.get(debugScope.token).snapshot();
   const agent = await ctx.agentLoop.create('synthetic-achievement', { provider: 'deepseek-official', model: 'deepseek-flash' }, { cwd: dir });
   agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Synthetic configure and edit workflow.' }] }));
   await agent.whenIdle();
@@ -73,6 +75,7 @@ test('native AgentLoop → real tools → journal: model config, file sequence, 
   assert.equal(s.totals.fileReads, 1); assert.equal(s.totals.fileChanges, 1); assert.equal(s.totals.presentations, 1);
   assert.ok(s.awards.some(a => a.rule?.recipe === 'read_then_change'));
   assert.ok(s.awards.some(a => a.title === '一轮新章'));
+  assert.deepEqual(service.debug.get(debugScope.token).snapshot(), debugBaseline, 'Real AgentLoop tools and collector keep recording to the real journal while browser debug exists');
   const reportDef = s.definitions.find(d => d.title === '项目纪念'); assert.ok(reportDef);
   const reported = await service.mutate('report', { requestId: 'report-1', definitionId: reportDef.id }, { source: 'model', sessionId: 'opaque-test' });
   assert.equal(reported.awards.find(a => a.definitionId === reportDef.id).source, 'model_report');

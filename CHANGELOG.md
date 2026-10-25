@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0-rc.2
+
+Rename the setup tab to “自定义生成” without changing generation flow. Replace
+default vector portraits with ten generated, themed illustration atlases and
+make equipment actions visible on ten-pull results. Add browser-only debug
+copies with quick completion, draw-and-wear, charms, reset and exit. Debug data
+never merges into the real archive; real work continues recording separately.
+
 ## 0.2.0-rc.1
 
 Add configurable profile frame heights with live previews, ten complete themes,

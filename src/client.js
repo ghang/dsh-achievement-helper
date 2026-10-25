@@ -8,6 +8,7 @@ window.__ModuleLoader__.load({
     const { useEffect, useId, useRef, useState, useSyncExternalStore } = React;
     const h = React.createElement;
     const STYLE = '__ACHIEVEMENT_CSS__';
+    const PORTRAITS = '__ACHIEVEMENT_PORTRAITS__';
     const API = '/dsh-achievement-journal/api';
     const POLL_MS = 1800;
     const THEMES = {
@@ -15,21 +16,21 @@ window.__ModuleLoader__.load({
         name: '探索', title: '你的成就手记', subtitle: '自然积累，偶尔回头看看。',
         hero: '每一步，都留下印记', eyebrow: 'YOUR JOURNEY, IN SMALL MOMENTS',
         role: '探索者', currency: '累计 Token', collection: '成就收藏', history: '使用历程',
-        tabs: ['概览', '成就收藏', '模型配置', '使用历程'], wear: '勋章',
+        tabs: ['概览', '成就收藏', '自定义生成', '使用历程'], wear: '勋章',
         progress: '本轮积累已记录', unlock: '新成就 · 留下印记', level: '新的成长阶段',
       },
       xianxia: {
         name: '修仙', title: '你的修行录', subtitle: '一问一答，皆是修行；点滴灵机，自有回响。',
         hero: '问道有迹，修行有成', eyebrow: '山海问道 · 点滴入卷',
         role: '问道行者', currency: '累计灵机', collection: '灵章阁', history: '问道年谱',
-        tabs: ['修行总览', '灵章阁', '历练配置', '问道年谱'], wear: '灵章',
+        tabs: ['修行总览', '灵章阁', '自定义生成', '问道年谱'], wear: '灵章',
         progress: '本轮灵机已入册', unlock: '新灵章 · 道有所成', level: '修行再进一境',
       },
       cyber: {
         name: '赛博朋克', title: '你的神经档案', subtitle: '每次连接，都在城市的暗处留下一道信号。',
         hero: '让每次连接留下信号', eyebrow: 'NEURAL ARCHIVE / LOCAL IDENTITY',
         role: '网络行者', currency: '累计脉冲', collection: '芯片收藏', history: '连接日志',
-        tabs: ['信号总览', '芯片收藏', '协议配置', '连接日志'], wear: '芯片',
+        tabs: ['信号总览', '芯片收藏', '自定义生成', '连接日志'], wear: '芯片',
         progress: '本轮信号已归档', unlock: '新芯片 · ACCESS GRANTED', level: '访问等级已提升',
       },
     };
@@ -44,9 +45,9 @@ window.__ModuleLoader__.load({
     };
     Object.keys(EXTRA_THEMES).forEach(function (id) {
       const parts = EXTRA_THEMES[id];
-      THEMES[id] = { name: parts[0], role: parts[1], title: parts[2], hero: parts[3], currency: parts[4], collection: parts[5], history: parts[6], wear: parts[7], art: { dark: parts[8], light: parts[9], gold: parts[10] }, subtitle: '日常的每一点积累，都有属于你的回响。', eyebrow: parts[0] + ' · 个人旅程', tabs: [parts[0] + '总览', parts[5], '模型配置', parts[6]], progress: '新的积累已入册', unlock: '新' + parts[7] + ' · 旅程留痕', level: '新的成长阶段' };
+      THEMES[id] = { name: parts[0], role: parts[1], title: parts[2], hero: parts[3], currency: parts[4], collection: parts[5], history: parts[6], wear: parts[7], art: { dark: parts[8], light: parts[9], gold: parts[10] }, subtitle: '日常的每一点积累，都有属于你的回响。', eyebrow: parts[0] + ' · 个人旅程', tabs: [parts[0] + '总览', parts[5], '自定义生成', parts[6]], progress: '新的积累已入册', unlock: '新' + parts[7] + ' · 旅程留痕', level: '新的成长阶段' };
     });
-    Object.keys(THEMES).forEach(function (id) { THEMES[id].tabs = THEMES[id].tabs.concat('角色收藏'); });
+    Object.keys(THEMES).forEach(function (id) { THEMES[id].tabs[2] = '自定义生成'; THEMES[id].tabs = THEMES[id].tabs.concat('角色收藏'); });
     const TAB_IDS = ['overview', 'collection', 'model', 'history', 'characters'];
     const RARITIES = ['N', 'R', 'SR', 'SSR'];
     const ANIMATION_NAMES = { none: '静止', float: '轻浮动', pulse: '呼吸', orbit: '环游', spark: '星光' };
@@ -119,6 +120,8 @@ window.__ModuleLoader__.load({
     const staticArtCache = new Map();
     let pendingDrawId = null;
     let pendingDrawTheme = null;
+    let debugToken = null;
+    let modeSwitching = false;
     let nextSurface = 0;
     let snapshot = initialState();
 
@@ -129,10 +132,12 @@ window.__ModuleLoader__.load({
         open: false, tab: 'overview', toast: null, notice: null, owner: null,
         generationJob: null, generationLoading: true, generationBusy: false, generationError: null,
         drawReceipt: null, drawPending: false, drawTheme: null, drawRetry: false, motionVersion: 0,
+        debugActive: Boolean(debugToken), debugExpired: false, debugTransition: false, debugPanelRequest: 0, closeSettingsRequest: 0,
       };
     }
     function publish(patch) {
       snapshot = Object.assign({}, snapshot, patch);
+      snapshot.busy = actionCount > 0 || modeSwitching || snapshot.debugExpired;
       listeners.forEach(function (listener) { listener(); });
     }
     function subscribe(listener) { listeners.add(listener); return function () { listeners.delete(listener); }; }
@@ -194,7 +199,7 @@ window.__ModuleLoader__.load({
       if (modelReport(item) || item && item.source === 'model_report') return '模型记录';
       return '自动统计';
     }
-    function definitionLabel(item) { return item && item.source === 'model' ? '模型配置' : '内置成就'; }
+    function definitionLabel(item) { return item && item.source === 'model' ? '自定义生成' : '内置成就'; }
     function activeDefinitions(data) { return array(data && data.definitions).filter(function (item) { return item.status !== 'archived'; }); }
     function allAwards(data) { return array(data && data.awards); }
     function definitionFor(data, id) { return array(data && data.definitions).find(function (item) { return item.id === id; }); }
@@ -209,6 +214,13 @@ window.__ModuleLoader__.load({
     function customPoolFull(data, catalog) {
       const limit = catalog && catalog.collection && catalog.collection.limits && catalog.collection.limits.customCharacters;
       return finite(limit) && characters(data).filter(function (item) { return item.source !== 'builtin'; }).length >= limit;
+    }
+    function portraitFor(character) {
+      const atlas = PORTRAITS && typeof PORTRAITS === 'object' && PORTRAITS.themes && PORTRAITS.themes[character.theme];
+      if (!atlas || !/^\/dsh-achievement-journal\/api\/assets\/portraits\/[a-z0-9_-]+\.webp(?:\?version=[a-f0-9]+)?$/.test(atlas.url || '') || !Number.isInteger(atlas.columns) || !Number.isInteger(atlas.rows) || atlas.columns < 1 || atlas.rows < 1) return null;
+      const cell = array(atlas.characters).find(function (item) { return item.id === character.id; }) || array(atlas.characters).find(function (item) { return item.icon === character.icon; }) || array(atlas.characters)[0];
+      if (!cell || !Number.isInteger(cell.column) || !Number.isInteger(cell.row) || cell.column < 0 || cell.row < 0 || cell.column >= atlas.columns || cell.row >= atlas.rows) return null;
+      return { url: atlas.url, columns: atlas.columns, rows: atlas.rows, column: cell.column, row: cell.row, aspect: finite(atlas.aspect) && atlas.aspect > 0 ? atlas.aspect : .875 };
     }
     function frameSettings(data) {
       const prefs = data && data.preferences || {};
@@ -228,9 +240,60 @@ window.__ModuleLoader__.load({
     }
     function pendingDrawStorage() {
       try {
-        if (pendingDrawId) window.sessionStorage.setItem('dsh-achievement-journal.draw', JSON.stringify({ id: pendingDrawId, theme: pendingDrawTheme }));
+        if (pendingDrawId) window.sessionStorage.setItem('dsh-achievement-journal.draw', JSON.stringify({ id: pendingDrawId, theme: pendingDrawTheme, scope: debugToken || 'real' }));
         else window.sessionStorage.removeItem('dsh-achievement-journal.draw');
       } catch (_error) { /* The in-memory request id still protects an ordinary retry. */ }
+    }
+    function debugStorage() {
+      try {
+        if (debugToken) window.sessionStorage.setItem('dsh-achievement-journal.debug', debugToken);
+        else window.sessionStorage.removeItem('dsh-achievement-journal.debug');
+      } catch (_error) { /* Scope remains explicit in this client lifetime. */ }
+    }
+    function invalidateModeView() {
+      generation += 1;
+      controllers.forEach(function (controller) { controller.abort(); }); controllers.clear();
+      clearTimeout(timer); clearTimeout(generationTimer); clearTimeout(noticeTimer); clearFeedback();
+      flight = null; catalogFlight = null; generationFlight = null; actionCount = 0;
+      needsBaseline = true; baselineRefreshPending = false; journalIdentity = null; seenNotifications.clear();
+      pendingDrawId = null; pendingDrawTheme = null; pendingDrawStorage();
+      const previous = snapshot;
+      publish(Object.assign(initialState(), { open: previous.open, tab: previous.tab, owner: previous.owner, debugPanelRequest: previous.debugPanelRequest, debugExpired: previous.debugExpired, debugTransition: true }));
+    }
+    async function switchDebug(action) {
+      if (!active || modeSwitching) return;
+      modeSwitching = true; invalidateModeView();
+      const epoch = generation;
+      let failure = null;
+      try {
+        const reply = await request('/debug/' + action, { method: 'POST', body: '{}' });
+        if (!active || epoch !== generation) return;
+        if (action !== 'exit') {
+          if (!reply || typeof reply.token !== 'string' || !/^[A-Za-z0-9_.:-]{1,512}$/.test(reply.token) || !validSnapshot(reply.snapshot)) throw new Error('调试会话返回无效，请重试或退出调试。');
+          debugToken = reply.token; debugStorage();
+          publish({ debugActive: true, debugExpired: false });
+          accept(reply.snapshot);
+        }
+      } catch (error) { if (active && epoch === generation) failure = error.message || '调试模式切换失败。'; }
+      finally {
+        if (active && epoch === generation) {
+          if (action === 'exit') { debugToken = null; debugStorage(); }
+          modeSwitching = false;
+          publish({ debugActive: Boolean(debugToken), debugTransition: false, debugExpired: action === 'exit' ? false : snapshot.debugExpired, actionError: failure ? action === 'exit' ? '已退出本机调试，服务端清理暂未确认。' : failure : null });
+          void refresh(); void refreshCatalog(); void refreshGeneration();
+        }
+      }
+    }
+    function showDebugPanel() { openCenter('overview'); publish({ debugPanelRequest: snapshot.debugPanelRequest + 1 }); }
+    async function debugAction(action, details) {
+      if (!active || !debugToken || modeSwitching || snapshot.debugExpired || actionCount) return;
+      const epoch = generation;
+      actionCount += 1; publish({ busy: true, actionError: null });
+      try {
+        const value = await request('/debug/action', { method: 'POST', body: JSON.stringify(Object.assign({ requestId: requestId(), action: action }, details || {})) });
+        if (active && epoch === generation) { accept(value); if (value.draw) publish({ drawReceipt: value.draw, open: true, tab: 'characters', closeSettingsRequest: snapshot.closeSettingsRequest + 1 }); }
+      } catch (error) { if (active && epoch === generation) publish({ actionError: error.message || '调试操作未完成。' }); }
+      finally { if (active && epoch === generation) { actionCount -= 1; publish({ busy: false }); } }
     }
     async function drawCharacters(selectedTheme) {
       if (!active || actionCount) return;
@@ -281,6 +344,7 @@ window.__ModuleLoader__.load({
     }
     function accept(data) {
       if (!validSnapshot(data)) throw new Error('成就手记返回了无法识别的数据，请刷新后重试。');
+      if (debugToken && (!data.debug || data.debug.active !== true || data.debug.sessionId !== debugToken) || !debugToken && data.debug && data.debug.active === true) throw new Error('记录的调试作用域不匹配，已停止同步。');
       const old = snapshot.data;
       if (old && old.createdAt === data.createdAt && finite(old.revision) && finite(data.revision) && data.revision < old.revision) return;
       const fresh = needsBaseline || journalIdentity !== (data.createdAt || 'journal') || document.hidden;
@@ -342,21 +406,28 @@ window.__ModuleLoader__.load({
     function closeCenter() { publish({ open: false, actionError: null }); }
 
     async function request(path, options) {
+      if (modeSwitching && !path.startsWith('/debug/')) throw new Error('正在切换数据模式，请稍候。');
+      if (debugToken && options && options.method === 'POST' && (path === '/generation' || path === '/generation/cancel')) throw new Error('调试模式不调用模型生成。');
+      if (debugToken && snapshot.debugExpired && options && options.method === 'POST' && !path.startsWith('/debug/')) throw new Error('调试会话已失效，请显式退出调试后继续。');
       const controller = new AbortController();
       controllers.add(controller);
       const epoch = generation;
       let timedOut = false;
       const timeout = setTimeout(function () { timedOut = true; controller.abort(); }, 12000);
       try {
+        const headers = Object.assign({ Accept: 'application/json' }, options && options.body ? { 'Content-Type': 'application/json' } : {}, options && options.headers || {});
+        if (debugToken && path !== '/debug/start') headers['x-daj-debug'] = debugToken;
         const response = await fetch(API + path, Object.assign({
           credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
-          headers: { Accept: 'application/json' },
-        }, options || {}, options && options.body ? { headers: { Accept: 'application/json', 'Content-Type': 'application/json' } } : {}));
+        }, options || {}, { headers: headers }));
         let body;
         try { body = await response.json(); } catch (_error) { throw new Error('服务未返回有效数据（HTTP ' + response.status + '）。'); }
         if (!response.ok) {
           const detail = body && (typeof body.error === 'string' ? body.error : body.error && body.error.message || body.message);
-          throw new Error(detail || '请求失败（HTTP ' + response.status + '）。');
+          const error = new Error(detail || '请求失败（HTTP ' + response.status + '）。');
+          error.code = body && (body.code || body.error && body.error.code);
+          if (error.code === 'DEBUG_SCOPE_EXPIRED' && debugToken && generation === epoch && active) publish({ debugExpired: true });
+          throw error;
         }
         if (generation !== epoch || !active) throw new Error('成就手记已卸载。');
         return body;
@@ -367,10 +438,10 @@ window.__ModuleLoader__.load({
     }
     function schedulePoll() {
       clearTimeout(timer);
-      if (active) timer = setTimeout(refresh, POLL_MS);
+      if (active && !modeSwitching) timer = setTimeout(refresh, POLL_MS);
     }
     function refresh() {
-      if (!active) return Promise.resolve();
+      if (!active || modeSwitching) return Promise.resolve();
       if (flight) return flight;
       if (document.hidden) { needsBaseline = true; schedulePoll(); return Promise.resolve(); }
       const epoch = generation;
@@ -396,7 +467,7 @@ window.__ModuleLoader__.load({
       else void refresh();
     }
     function refreshCatalog() {
-      if (catalogFlight || !active) return catalogFlight || Promise.resolve();
+      if (catalogFlight || !active || modeSwitching) return catalogFlight || Promise.resolve();
       const epoch = generation;
       const sessionId = currentSessionId();
       catalogFlight = request('/catalog' + (sessionId ? '?sessionId=' + encodeURIComponent(sessionId) : '')).then(function (data) {
@@ -426,10 +497,13 @@ window.__ModuleLoader__.load({
       }
     }
     function refreshGeneration(id) {
-      if (!active || generationFlight) return generationFlight || Promise.resolve();
+      if (!active || modeSwitching || generationFlight) return generationFlight || Promise.resolve();
       const epoch = generation;
       generationFlight = request('/generation' + (id ? '?id=' + encodeURIComponent(id) : '')).then(function (value) {
-        if (active && epoch === generation) acceptGeneration(value, id);
+        if (active && epoch === generation) {
+          if (debugToken) publish({ generationJob: null, generationLoading: false, generationError: null });
+          else acceptGeneration(value, id);
+        }
       }).catch(function (error) {
         if (!active || epoch !== generation) return;
         publish({ generationLoading: false, generationError: error.message || '暂时无法同步生成任务。' });
@@ -438,6 +512,7 @@ window.__ModuleLoader__.load({
       return generationFlight;
     }
     async function startGeneration(options) {
+      if (debugToken || modeSwitching) { publish({ generationError: '调试模式不调用模型。退出调试后可使用自定义生成。' }); return; }
       if (!active || snapshot.generationBusy || snapshot.generationLoading || runningJob(snapshot.generationJob)) return;
       const epoch = generation, body = Object.assign({ requestId: requestId() }, options);
       const sessionId = currentSessionId(); if (sessionId) body.sessionId = sessionId;
@@ -451,6 +526,7 @@ window.__ModuleLoader__.load({
       } finally { if (active && epoch === generation) publish({ generationBusy: false }); }
     }
     async function cancelGeneration() {
+      if (debugToken || modeSwitching) return;
       const job = snapshot.generationJob;
       if (!runningJob(job) || job.stage === 'applying' || snapshot.generationBusy) return;
       const epoch = generation; publish({ generationBusy: true, generationError: null });
@@ -490,6 +566,7 @@ window.__ModuleLoader__.load({
       return mutate('/configure', { requestId: requestId(), expectedRevision: data.revision, definitions: [], archiveIds: [item.id] });
     }
     async function copyText(text) {
+      if (debugToken) { publish({ actionError: '调试模式请使用快速完成，不向工作会话发送记录请求。' }); return; }
       try {
         if (!window.navigator || !window.navigator.clipboard || typeof window.navigator.clipboard.writeText !== 'function') {
           throw new Error('此环境不能直接复制。请选中文本，使用系统复制后粘贴到工作会话。');
@@ -575,7 +652,18 @@ window.__ModuleLoader__.load({
       const character = props.character || { name: '尚未佩戴角色', icon: 'star', animation: 'none' };
       const reduce = props.reduce;
       const art = validArt(character.art) ? character.art : null;
+      const portrait = portraitFor(character);
+      const [failedPortrait, setFailedPortrait] = useState(null);
       const [still, setStill] = useState(function () { return art && staticArtCache.get(art) || null; });
+      useEffect(function () {
+        let live = true;
+        setFailedPortrait(null);
+        if (!portrait || typeof window.Image !== 'function') return;
+        const picture = new window.Image();
+        picture.onerror = function () { if (live) setFailedPortrait(portrait.url); };
+        picture.src = portrait.url;
+        return function () { live = false; picture.onerror = null; picture.onload = null; };
+      }, [portrait && portrait.url]);
       useEffect(function () {
         let live = true;
         if (!reduce || !art) { setStill(null); return; }
@@ -603,8 +691,8 @@ window.__ModuleLoader__.load({
       const colors = THEMES[character.theme] && THEMES[character.theme].art || { dark: '#477a70', light: '#d8e7cf', gold: '#c3a35d' };
       const ears = ['fox', 'cat', 'dragon'].includes(character.icon);
       const robot = character.icon === 'robot';
-      return h('span', { className: 'daj-character-art ' + (props.className || ''), 'data-animation': reduce ? 'none' : character.animation || 'none', style: { '--daj-character-size': (props.size || 100) + 'px', '--daj-character-accent': colors.dark, '--daj-character-light': colors.light } },
-        art && (!reduce || still) ? h('img', { src: reduce ? still : art, alt: '', draggable: false }) : h('svg', { viewBox: '0 0 140 160', 'aria-hidden': true },
+      return h('span', { className: 'daj-character-art ' + (props.className || ''), 'data-animation': reduce ? 'none' : character.animation || 'none', style: { '--daj-character-size': (props.size || 100) + 'px', '--daj-character-aspect': portrait && portrait.url !== failedPortrait ? portrait.aspect : .875, '--daj-character-accent': colors.dark, '--daj-character-light': colors.light } },
+        art && (!reduce || still) ? h('img', { src: reduce ? still : art, alt: '', draggable: false }) : portrait && portrait.url !== failedPortrait ? h('span', { className: 'daj-character-portrait', 'aria-hidden': true, style: { backgroundImage: 'url("' + portrait.url + '")', backgroundSize: portrait.columns * 100 + '% ' + portrait.rows * 100 + '%', backgroundPosition: (portrait.columns === 1 ? 0 : portrait.column / (portrait.columns - 1) * 100) + '% ' + (portrait.rows === 1 ? 0 : portrait.row / (portrait.rows - 1) * 100) + '%' } }) : h('svg', { viewBox: '0 0 140 160', 'aria-hidden': true },
           h('ellipse', { cx: 70, cy: 145, rx: 41, ry: 8, fill: colors.dark, opacity: .12 }),
           h('circle', { cx: 70, cy: 70, r: 57, fill: colors.light, opacity: .48 }),
           h('path', { d: 'M30 141v-25c0-27 80-27 80 0v25Z', fill: colors.dark }),
@@ -623,9 +711,11 @@ window.__ModuleLoader__.load({
       const badges = array(data && data.equipment && data.equipment.badges).slice(0, 3).map(function (id) { return definitionFor(data, id) || awardFor(data, id); }).filter(Boolean);
       const charm = data && data.equipment && charmFor(data, data.equipment.charm);
       const short = settings.frameHeight <= 40;
-      return h('div', { className: 'daj-account-frame daj-frame-' + settings.frameStyle + (short ? ' daj-frame-short' : ''), style: { height: props.fit ? '100%' : settings.frameHeight + 'px' }, 'data-daj-reduce': reducedMotion(data) ? 'true' : 'false' },
+      const debugging = snapshot.debugActive;
+      return h('div', { className: 'daj-account-frame daj-frame-' + settings.frameStyle + (short ? ' daj-frame-short' : '') + (debugging ? ' daj-frame-debug' : ''), style: { height: props.fit ? '100%' : settings.frameHeight + 'px' }, 'data-daj-reduce': reducedMotion(data) ? 'true' : 'false' },
+        debugging ? h('b', { className: 'daj-frame-debug-label' }, '调试') : null,
         character ? h(CharacterArt, { character: character, reduce: reducedMotion(data), size: Math.max(23, Math.min(145, settings.frameHeight - 6)), className: 'daj-frame-character' }) : h('span', { className: 'daj-frame-empty-icon' }, h(Icon, { name: 'medal', size: short ? 18 : 28 })),
-        h('span', { className: 'daj-frame-copy' }, h('strong', null, character ? character.name : '成就手记'),
+        h('span', { className: 'daj-frame-copy' }, h('strong', { title: character ? character.name : '成就手记' }, character ? character.name : '成就手记', props.interactive && character ? h('small', { className: 'daj-frame-change' }, '更换') : null),
           h('span', { className: 'daj-profile-level' }, data ? 'Lv.' + (data.level.isLowerBound || data.level.incomplete ? '≥' : '') + exact(data.level.number) + (short ? '' : ' · ' + allAwards(data).length + ' 枚成就') : '正在连接'),
           h('span', { className: 'daj-profile-badges' }, badges.length ? badges.map(function (item) { return h('span', { key: item.id, title: presentation(item, data).title }, h(Badge, { item: item, theme: themeId(data), size: 18 })); }) : !short ? h('small', null, character ? THEMES[character.theme] && THEMES[character.theme].role || '旅途同伴' : '等待第一枚纪念') : null)),
         charm ? h('span', { className: 'daj-profile-charm', title: presentation(charm, data).title }, h(Badge, { item: charm, theme: themeId(data), size: 20 })) : null);
@@ -646,6 +736,32 @@ window.__ModuleLoader__.load({
           h('label', { className: 'daj-grow' }, h('span', { className: 'daj-field-label' }, '高度 · ' + draft.frameHeight + 'px'), h('input', { id: props.idPrefix + '-frame-height', type: 'range', min: 32, max: 160, step: 1, value: draft.frameHeight, disabled: props.busy, onChange: function (event) { setDraft(Object.assign({}, draft, { frameHeight: Math.max(32, Math.min(160, Number(event.target.value) || 32)) })); } })),
           h(Button, { disabled: props.busy || !changed, onClick: function () { void preferences(draft); } }, '保存展示框')),
         h('div', { className: 'daj-frame-live-preview', 'aria-label': '展示框实时预览' }, h('small', null, '实时预览 · 保存后应用到账户附近'), h(ProfileFrame, { data: props.data, settings: draft })));
+    }
+    function DebugPanel() {
+      const state = useJournal(), data = state.data;
+      const [definitionId, setDefinitionId] = useState('');
+      const [selectedTheme, setSelectedTheme] = useState(themeId(data));
+      const [charm, setCharm] = useState('star');
+      const disabled = state.busy || state.debugTransition || state.debugExpired;
+      return h('section', { className: 'daj-debug-panel', 'aria-label': '调试模式面板' },
+        h('div', { className: 'daj-section-heading' }, h('div', null, h('h3', null, '调试模式'), h('p', null, '使用独立临时数据快速体验成就与角色。工作会话和真实积累保持独立。')),
+          !state.debugActive ? h(Button, { disabled: state.debugTransition, onClick: function () { void switchDebug('start'); } }, state.debugTransition ? '正在进入…' : '进入调试模式') : h(Pill, null, state.debugExpired ? '调试已失效' : '独立演示数据')),
+        state.debugActive ? h(React.Fragment, null,
+          state.debugExpired ? h('p', { role: 'alert', className: 'daj-debug-expired' }, '调试会话已失效，尚未切回真实数据。请点击退出调试。') : h('div', { className: 'daj-debug-actions' },
+            h('label', null, h('span', { className: 'daj-field-label' }, '快速完成成就'), h('select', { id: 'daj-debug-definition', value: definitionId, disabled: disabled, onChange: function (event) { setDefinitionId(event.target.value); } }, h('option', { value: '' }, '自动选择下一项'), activeDefinitions(data).map(function (item) { return h('option', { key: item.id, value: item.id }, presentation(item, data).title); }))),
+            h('div', { className: 'daj-row' }, h(Button, { disabled: disabled, onClick: function () { void debugAction('complete', definitionId ? { definitionId: definitionId } : {}); } }, '完成所选成就'), h(Button, { disabled: disabled, onClick: function () { void debugAction('complete_all'); } }, '完成全部成就')),
+            h('label', null, h('span', { className: 'daj-field-label' }, '体验主题'), h('select', { id: 'daj-debug-theme', value: selectedTheme, disabled: disabled, onChange: function (event) { setSelectedTheme(event.target.value); } }, Object.keys(THEMES).map(function (id) { return h('option', { key: id, value: id }, THEMES[id].name); }))),
+            h(Button, { disabled: disabled, onClick: function () { void debugAction('draw', { theme: selectedTheme }); } }, '调试十连并佩戴'),
+            h('label', null, h('span', { className: 'daj-field-label' }, '体验挂件'), h('select', { id: 'daj-debug-charm', value: charm, disabled: disabled, onChange: function (event) { setCharm(event.target.value); } }, Object.keys(CHARM_NAMES).map(function (id) { return h('option', { key: id, value: id }, CHARM_NAMES[id]); }))),
+            h(Button, { disabled: disabled, onClick: function () { void debugAction('charm', { charm: charm }); } }, '加一个挂件')),
+          h('div', { className: 'daj-debug-management' }, h(Button, { disabled: disabled, onClick: function () { void switchDebug('reset'); } }, '重置调试数据'), h(Button, { disabled: state.debugTransition, onClick: function () { void switchDebug('exit'); } }, '退出调试模式'))) : null);
+    }
+    function DebugBanner(props) {
+      const state = props.state;
+      if (!state.debugActive && !state.debugTransition) return null;
+      return h('aside', { className: 'daj-debug-banner', role: 'status', 'aria-live': 'polite' },
+        h('strong', null, state.debugExpired ? '调试已失效' : state.debugTransition ? '正在切换模式…' : '调试模式'), h('span', null, state.debugExpired ? '未切回真实数据' : '当前为独立临时数据'),
+        h('button', { type: 'button', disabled: state.debugTransition, onClick: showDebugPanel }, '打开面板'), h('button', { type: 'button', disabled: state.debugTransition, onClick: function () { void switchDebug('exit'); } }, '退出调试'));
     }
     function CharacterEditor(props) {
       const item = props.item;
@@ -713,13 +829,14 @@ window.__ModuleLoader__.load({
       const [direction, setDirection] = useState('');
       const [style, setStyle] = useState('balanced');
       const info = props.state.catalog && props.state.catalog.generation;
-      const busy = props.state.generationBusy || props.state.generationLoading || runningJob(props.state.generationJob);
+      const busy = props.state.generationBusy || props.state.generationLoading || runningJob(props.state.generationJob) || props.state.debugExpired || props.state.debugTransition;
       const full = customPoolFull(props.data, props.state.catalog);
       return h('section', { className: 'daj-card daj-section daj-character-generator' }, h('h3', null, '让模型创作角色'), h('p', { className: 'daj-hint' }, '沿用当前或默认模型，生成后自动加入卡池。抽取仍使用成就点。'),
         h('div', { className: 'daj-direction-row' }, h('label', null, h('span', { className: 'daj-field-label' }, '创作主题'), h('select', { id: 'daj-character-generation-theme', value: selectedTheme, disabled: busy, onChange: function (event) { setSelectedTheme(event.target.value); } }, Object.keys(THEMES).map(function (id) { return h('option', { key: id, value: id }, THEMES[id].name); }))),
           h('label', { className: 'daj-grow' }, h('span', { className: 'daj-field-label' }, '角色方向 · 可选'), h('input', { id: 'daj-character-generation-direction', className: 'daj-direction-input', value: direction, maxLength: 120, disabled: busy, placeholder: '例如：抱着莲灯的狐狸、星海领航机器人', onChange: function (event) { setDirection(event.target.value); } }))),
         h('label', null, h('span', { className: 'daj-field-label' }, '创作风格'), h('select', { id: 'daj-character-generation-style', value: style, disabled: busy, onChange: function (event) { setStyle(event.target.value); } }, GENERATION_STYLES.map(function (choice) { return h('option', { key: choice.id, value: choice.id }, choice.label); }))),
-        h(Button, { className: 'daj-primary daj-wide', disabled: busy || full || !info || info.available !== true, onClick: function () { if (!full) void startGeneration({ kind: 'characters', theme: selectedTheme, direction: direction.trim() || undefined, style: style }); } }, busy ? '模型任务进行中…' : '模型生成角色'),
+        h(Button, { className: 'daj-primary daj-wide', disabled: props.state.debugActive || busy || full || !info || info.available !== true, onClick: function () { if (!full) void startGeneration({ kind: 'characters', theme: selectedTheme, direction: direction.trim() || undefined, style: style }); } }, busy ? '模型任务进行中…' : '模型生成角色'),
+        props.state.debugActive ? h('p', { className: 'daj-hint' }, '调试模式不调用模型，可在调试面板快速体验。') : null,
         full ? h('p', { className: 'daj-hint', role: 'status' }, '自定义卡池已满，仍可编辑已有角色的外观。') : null,
         info && info.available === false ? h('p', { className: 'daj-hint' }, info.reason || '当前没有可用模型。') : null,
         h(GenerationStatus, { state: props.state, selectCharacter: props.view, select: function () { openCenter('collection'); } }));
@@ -741,7 +858,11 @@ window.__ModuleLoader__.load({
             h(Button, { className: 'daj-primary', disabled: state.busy || !state.drawRetry && (!finite(points.balance) || points.balance < cost), onClick: function () { void drawCharacters(selectedTheme); } }, state.drawPending ? '正在揭晓…' : state.drawRetry ? '重试这次十连' : '1 成就点 · 十连抽取'),
             h('small', null, state.drawRetry ? '沿用同一次请求重试，确认原来的结果。' : points.balance === 0 ? '先在日常使用中解锁一项成就，就能开始。' : '十连至少包含 1 位 SR 或更高稀有度角色。'))),
         receipt ? h('section', { className: 'daj-card daj-section daj-draw-results', 'aria-label': '十连抽取结果' }, h('div', { className: 'daj-section-heading' }, h('h3', null, '最近一次十连'), h('small', { className: 'daj-muted' }, (THEMES[receipt.theme] && THEMES[receipt.theme].name || '') + ' · ' + date(receipt.at, true))),
-          h('div', { className: 'daj-draw-result-grid' }, array(receipt.results).map(function (result, index) { const item = characterFor(data, result.id); return h('div', { key: index, className: 'daj-draw-result daj-rarity-' + result.rarity }, h(CharacterArt, { character: item, reduce: reducedMotion(data), size: 64 }), h('strong', null, item ? item.name : '角色记录同步中'), h('small', null, result.rarity + ' · ' + (result.isNew ? '新角色' : '重复角色'))); }))) : null,
+          h('div', { className: 'daj-draw-result-grid' }, array(receipt.results).map(function (result, index) {
+            const item = characterFor(data, result.id), worn = data.equipment && data.equipment.character === result.id;
+            return h('div', { key: index, className: 'daj-draw-result daj-rarity-' + result.rarity }, h(CharacterArt, { character: item, reduce: reducedMotion(data), size: 78 }), h('strong', null, item ? item.name : '角色记录同步中'), h('small', null, result.rarity + ' · ' + (result.isNew ? '新角色' : '重复角色')),
+              h(Button, { className: worn ? '' : 'daj-primary', disabled: state.busy || !item || !ownedCharacter(data, result.id) || worn, 'aria-label': '佩戴到成就框 ' + (item ? item.name : result.id), onClick: function () { void mutate('/equip', { id: result.id, slot: 'character', equipped: true }); } }, worn ? '已佩戴到成就框' : '佩戴到成就框'));
+          }))) : null,
         mode === 'create' ? h('div', { className: 'daj-character-studio' }, h(CharacterGenerator, { data: data, state: state, view: view }), h(CharacterEditor, { key: editing && editing.id || 'new', item: editing, data: data, catalog: state.catalog, busy: state.busy, clear: function () { setEditing(null); } })) : h(React.Fragment, null,
           h('div', { className: 'daj-filters' }, [['owned', '已获得'], ['pool', '全部卡池']].map(function (choice) { return h(Button, { key: choice[0], className: 'daj-chip' + (filter === choice[0] ? ' daj-selected' : ''), 'aria-pressed': filter === choice[0], onClick: function () { setFilter(choice[0]); } }, choice[1]); }),
             h('label', { className: 'daj-character-theme-filter' }, h('span', null, '角色主题'), h('select', { id: 'daj-character-theme-filter', value: themeFilter, onChange: function (event) { setThemeFilter(event.target.value); } }, h('option', { value: 'all' }, '全部主题'), Object.keys(THEMES).map(function (id) { return h('option', { key: id, value: id }, THEMES[id].name); })))),
@@ -749,7 +870,7 @@ window.__ModuleLoader__.load({
             const own = ownedCharacter(data, item.id), worn = data.equipment && data.equipment.character === item.id;
             return h('article', { key: item.id, className: 'daj-card daj-character-card daj-rarity-' + item.rarity + (worn ? ' daj-character-worn' : '') }, h('div', { className: 'daj-character-topline' }, h('span', { className: 'daj-rarity' }, item.rarity), h('small', null, THEMES[item.theme] && THEMES[item.theme].name)),
               h(CharacterArt, { character: item, reduce: reducedMotion(data), size: 110 }), h('h3', null, item.name), h('p', null, item.description), h('small', { className: 'daj-character-count' }, own ? '已收藏 ' + exact(own.count) + ' 份' : '尚未获得 · 已在卡池'),
-              h(Button, { className: worn ? '' : 'daj-primary', disabled: state.busy || !own, 'aria-label': (worn ? '取下角色 ' : '佩戴角色 ') + item.name, onClick: function () { void mutate('/equip', { id: item.id, slot: 'character', equipped: !worn }); } }, worn ? '正在陪伴 · 取下' : own ? '佩戴角色' : '抽取后可佩戴'),
+              h(Button, { className: worn ? '' : 'daj-primary', disabled: state.busy || !own, 'aria-label': (worn ? '取下角色 ' : '佩戴角色 ') + item.name, onClick: function () { void mutate('/equip', { id: item.id, slot: 'character', equipped: !worn }); } }, worn ? '正在陪伴 · 取下' : own ? '佩戴到成就框' : '抽取后可佩戴'),
               item.source !== 'builtin' ? h(Button, { className: 'daj-text-button', 'aria-label': '编辑角色 ' + item.name, onClick: function () { setEditing(item); setMode('create'); } }, '编辑外观') : null);
           })) : h('section', { className: 'daj-card' }, h(Empty, { title: filter === 'owned' ? '还没有遇见第一位同伴' : '这个主题的卡池还很安静', icon: 'star', action: h(Button, { onClick: function () { setFilter('pool'); setThemeFilter('all'); } }, '看看全部卡池') }, filter === 'owned' ? '解锁成就积累点数，再来抽取喜欢的主题。' : '可以让模型或自己创作新角色。'))));
     }
@@ -813,7 +934,7 @@ window.__ModuleLoader__.load({
         h('div', { className: 'daj-overview-grid' },
           h('section', { className: 'daj-card daj-section' }, h('div', { className: 'daj-section-heading' }, h('h3', null, '下一枚，正在路上'), h(Button, { className: 'daj-text-button', onClick: function () { props.navigate('collection'); } }, '查看全部', h(Icon, { name: 'chevron', size: 12 }))),
             next.length ? next.map(function (item) { return h(DefinitionRow, { key: item.id, data: data, item: item, onClick: function () { props.select(item.id); } }); }) : h(Empty, { title: defs.some(function (item) { return !unlocked(item); }) ? '还藏着一些小惊喜' : defs.length ? '这一页，已经写得很满' : '还没有成就定义', icon: 'medal' }, defs.length ? '已经获得的纪念都在收藏里，其他经历可以慢慢来。' : '让模型帮你配置一份自己的成就手记。')),
-          h('section', { className: 'daj-card daj-section' }, h('div', { className: 'daj-section-heading' }, h('h3', null, '你的自选目标'), h(Button, { className: 'daj-text-button', onClick: function () { props.navigate('model'); } }, '模型配置', h(Icon, { name: 'chevron', size: 12 }))),
+          h('section', { className: 'daj-card daj-section' }, h('div', { className: 'daj-section-heading' }, h('h3', null, '你的自选目标'), h(Button, { className: 'daj-text-button', onClick: function () { props.navigate('model'); } }, '自定义生成', h(Icon, { name: 'chevron', size: 12 }))),
             models.length ? models.map(function (item) { return h(DefinitionRow, { key: item.id, data: data, item: item, onClick: function () { props.select(item.id); } }); }) : h(Empty, { title: '也可以，什么都不赶', icon: 'leaf', action: h(Button, { onClick: function () { props.navigate('model'); } }, '让模型帮我配置') }, '目标是可选的。你的日常积累一直都在。'))),
         h('section', { className: 'daj-recent' }, h('div', { className: 'daj-section-heading' }, h('h3', null, '最近收藏'), h(Button, { className: 'daj-text-button', onClick: function () { props.navigate('history'); } }, '查看历程', h(Icon, { name: 'chevron', size: 12 }))),
           awards.length ? h('div', { className: 'daj-recent-grid' }, awards.slice(0, 4).map(function (award) {
@@ -845,8 +966,9 @@ window.__ModuleLoader__.load({
           h(Button, { className: worn ? '' : 'daj-primary', disabled: props.busy, onClick: function () { void mutate('/equip', { id: item.id, slot: 'badge', equipped: !worn }); } }, h(Icon, { name: 'medal', size: 15 }), worn ? '取下' + theme(data).wear : '佩戴' + theme(data).wear),
           h(Button, { disabled: props.busy, onClick: function () { void mutate('/equip', { id: item.id, slot: 'charm', equipped: !charm }); } }, charm ? '取下挂件' : '作为挂件佩戴'))
           : modelReport(item) ? h(Button, { className: 'daj-primary', onClick: function () {
+            if (snapshot.debugActive) { showDebugPanel(); return; }
             void copyText('请核对当前会话的实际证据。如果确已达成，请用成就手记的模型记录接口记录成就 ' + item.id + '（' + name.title + '），附简短依据；不要凭空记录完成。');
-          } }, h(Icon, { name: 'copy', size: 14 }), '复制达成记录请求') : null,
+          } }, h(Icon, { name: snapshot.debugActive ? 'settings' : 'copy', size: 14 }), snapshot.debugActive ? '在调试面板完成' : '复制达成记录请求') : null,
         h('p', { className: 'daj-detail-note' }, owned ? '摘下只改变展示。已获得的记录会一直留在手记里。' : modelReport(item) ? '此项由会话中的模型核对后记录，始终保留模型记录来源。' : '自然积累即可。这里的数字描述使用经历，不评价能力或产出。'),
         item.source === 'model' && item.status !== 'archived' ? h(Button, { className: 'daj-text-button daj-archive', disabled: props.busy, onClick: function () {
           if (!confirmArchive) { setConfirmArchive(true); return; }
@@ -912,7 +1034,7 @@ window.__ModuleLoader__.load({
       const styles = array(capability && capability.styles).filter(function (item) { return item && GENERATION_STYLES.some(function (choice) { return choice.id === item.id; }); });
       const choices = styles.length ? styles : GENERATION_STYLES;
       const job = state.generationJob;
-      const running = runningJob(job), busy = state.generationBusy || running || state.generationLoading;
+      const running = runningJob(job), busy = state.generationBusy || running || state.generationLoading || state.debugTransition || state.debugExpired;
       const route = capability && capability.route;
       const routeLabel = route && [route.provider, route.model].filter(function (part) { return typeof part === 'string' && part; }).join(' / ');
       function toggleMetric(id) {
@@ -942,11 +1064,12 @@ window.__ModuleLoader__.load({
                 return h('label', { key: choice.id, className: 'daj-style-choice' + (style === choice.id ? ' daj-selected' : '') }, h('input', { type: 'radio', name: 'daj-generation-style', value: choice.id, checked: style === choice.id, disabled: busy, onChange: function () { setStyle(choice.id); } }), h('strong', null, choice.label), h('small', null, choice.description));
               }))),
             capability && capability.available === false ? h('div', { className: 'daj-generation-unavailable', role: 'status' }, capability.reason || '当前没有可用的生成模型。请先在 DSH 中选择模型，再重试。', h(Button, { className: 'daj-text-button', onClick: refreshCatalog }, '重新检查')) : null,
-            h(Button, { className: 'daj-primary daj-wide', disabled: !capability || capability.available !== true || !selected.length || busy, onClick: function () {
+            h(Button, { className: 'daj-primary daj-wide', disabled: state.debugActive || !capability || capability.available !== true || !selected.length || busy, onClick: function () {
               const options = { metrics: selected, theme: generationTheme, style: style };
               if (direction.trim()) options.direction = direction.trim();
               void startGeneration(options);
             } }, h(Icon, { name: 'spark', size: 17 }), state.generationBusy && !running ? '正在启动…' : running ? '正在生成…' : state.generationLoading ? '正在同步任务…' : '分析并生成成就'),
+            state.debugActive ? h('p', { className: 'daj-hint daj-generation-caption' }, '调试模式不调用模型，可在调试面板快速体验。') : null,
             h('p', { className: 'daj-hint daj-generation-caption' }, routeLabel ? '本次使用' + (capability.routeSource === 'session' ? '当前会话模型' : '默认模型') + ' · ' + routeLabel : '使用当前会话或默认模型。', ' 一次生成会调用模型；校验通过后自动应用，失败不应用。'),
             h(GenerationStatus, { state: state, select: props.select }),
             props.catalogError ? h('div', { className: 'daj-inline-error', role: 'alert' }, props.catalogError, h(Button, { className: 'daj-text-button', onClick: refreshCatalog }, '重试目录')) : null,
@@ -1008,6 +1131,7 @@ window.__ModuleLoader__.load({
       const charms = array(props.catalog && props.catalog.equipment && props.catalog.equipment.charms);
       const equippedCharm = data.equipment && data.equipment.charm;
       return h('section', { className: 'daj-preferences', 'aria-label': '主题与反馈设置' },
+        h(DebugPanel),
         h(FrameSettings, { data: data, busy: props.busy, idPrefix: props.idPrefix }),
         charms.length ? h('div', { className: 'daj-preference-row' }, h('label', { htmlFor: props.idPrefix + '-charm' }, h('strong', null, '随身挂件'), h('small', null, '选一件小装饰，也可以从收藏里佩戴已获得的成就。')),
           h('select', { id: props.idPrefix + '-charm', value: equippedCharm || 'none', disabled: props.busy, onChange: function (event) { void mutate('/equip', { id: event.target.value, slot: 'charm', equipped: event.target.value !== 'none' }); } },
@@ -1055,10 +1179,12 @@ window.__ModuleLoader__.load({
       const [selection, setSelection] = useState(null);
       useDialogFocus(panel, function () { if (settingsOpen) setSettingsOpen(false); else closeCenter(); });
       useEffect(function () { if (body.current) body.current.scrollTop = 0; }, [state.tab, settingsOpen]);
+      useEffect(function () { if (state.debugPanelRequest) { setSettingsOpen(true); if (body.current) body.current.scrollTop = 0; } }, [state.debugPanelRequest]);
+      useEffect(function () { if (state.closeSettingsRequest) setSettingsOpen(false); }, [state.closeSettingsRequest]);
       const t = theme(data);
       function navigate(tab) { publish({ tab: tab }); }
       function select(id) { setSelection(id); navigate('collection'); }
-      return h('div', { className: 'daj-backdrop', onMouseDown: function (event) { if (event.target === event.currentTarget) closeCenter(); } },
+      return h('div', { className: 'daj-backdrop' + (state.debugActive || state.debugTransition ? ' daj-debug-backdrop' : ''), onMouseDown: function (event) { if (event.target === event.currentTarget) closeCenter(); } },
         h('section', { className: 'daj-surface daj-center', 'data-daj-theme': themeId(data), 'data-daj-reduce': reducedMotion(data) ? 'true' : 'false', ref: panel, role: 'dialog', 'aria-modal': true, 'aria-label': '成就手记', tabIndex: -1 },
           h('header', { className: 'daj-center-header' }, h('div', { className: 'daj-brand' }, h(Icon, { name: 'medal', size: 20 }), h('strong', null, '成就手记'), h('span', null, '留给自己的每一步')),
             h('div', { className: 'daj-header-actions' },
@@ -1124,6 +1250,7 @@ window.__ModuleLoader__.load({
       }, []);
       if (state.owner !== token.current) return null;
       return createPortal(h(React.Fragment, null,
+        h(DebugBanner, { state: state }),
         state.open ? h(Center, { state: state }) : null,
         h(Feedback, { state: state }),
         state.notice ? h('div', { className: 'daj-notice', role: 'status', 'aria-live': 'polite' }, state.notice) : null), document.body);
@@ -1133,8 +1260,8 @@ window.__ModuleLoader__.load({
       const frame = frameSettings(data);
       const narrow = props.wide === false;
       return h(React.Fragment, null,
-        h('button', { type: 'button', className: 'daj-surface daj-profile-strip' + (narrow ? ' daj-profile-narrow' : ''), style: { height: narrow ? '22px' : frame.frameHeight + 'px' }, 'data-daj-theme': themeId(data), 'data-daj-reduce': reducedMotion(data) ? 'true' : 'false', title: '打开成就手记', 'aria-label': '打开成就手记', onClick: function () { openCenter('overview'); } },
-          narrow ? h(Icon, { name: 'medal', size: 17 }) : h(ProfileFrame, { data: data, settings: frame, fit: true })),
+        h('button', { type: 'button', className: 'daj-surface daj-profile-strip' + (narrow ? ' daj-profile-narrow' : ''), style: { height: narrow ? '22px' : frame.frameHeight + 'px' }, 'data-daj-theme': themeId(data), 'data-daj-reduce': reducedMotion(data) ? 'true' : 'false', title: '打开成就手记 · 点击更换当前角色', 'aria-label': '打开成就手记', onClick: function () { openCenter(data && data.equipment && data.equipment.character ? 'characters' : 'overview'); } },
+          narrow ? h(Icon, { name: 'medal', size: 17 }) : h(ProfileFrame, { data: data, settings: frame, fit: true, interactive: true })),
         h(GlobalSurface));
     }
     function SettingsSection() {
@@ -1156,10 +1283,15 @@ window.__ModuleLoader__.load({
     function apply(ctx) {
       clientContext = ctx;
       active = true; generation += 1;
+      modeSwitching = false;
+      try {
+        const savedDebug = window.sessionStorage.getItem('dsh-achievement-journal.debug');
+        debugToken = typeof savedDebug === 'string' && /^[A-Za-z0-9_.:-]{1,512}$/.test(savedDebug) ? savedDebug : null;
+      } catch (_error) { /* Preserve an in-memory debug scope when storage is unavailable. */ }
       snapshot = initialState();
       try {
         const savedDraw = JSON.parse(window.sessionStorage.getItem('dsh-achievement-journal.draw') || 'null');
-        if (savedDraw && typeof savedDraw.id === 'string' && savedDraw.id.length <= 256 && THEMES[savedDraw.theme]) { pendingDrawId = savedDraw.id; pendingDrawTheme = savedDraw.theme; }
+        if (savedDraw && (savedDraw.scope || 'real') === (debugToken || 'real') && typeof savedDraw.id === 'string' && savedDraw.id.length <= 256 && THEMES[savedDraw.theme]) { pendingDrawId = savedDraw.id; pendingDrawTheme = savedDraw.theme; }
       } catch (_error) { /* Browser storage can be unavailable. */ }
       snapshot.drawRetry = Boolean(pendingDrawId); snapshot.drawTheme = pendingDrawTheme;
       actionCount = 0; needsBaseline = true; baselineRefreshPending = false; journalIdentity = null;

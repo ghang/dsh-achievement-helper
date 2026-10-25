@@ -9,6 +9,8 @@ import { createJournal } from './journal.mjs';
 import { createCollector } from './collector.mjs';
 import { createGenerationController } from './generation.mjs';
 import { THEME_IDS, ICON_IDS, ANIMATION_IDS } from './collection.mjs';
+import { createDebugController } from './debug.mjs';
+import { servePortraitAsset } from './portrait-assets.mjs';
 
 export const name = 'achievement-journal';
 export const inject = ['tools', 'sessions', 'webServer', 'connection', 'llm'];
@@ -166,6 +168,7 @@ export async function createAchievementJournal(ctx, config = {}) {
   const disposers = []; let disposed = false; let closing = false; let ingestFailures = 0; let generation;
   let notifications = [];
   const now = config.now ?? Date.now;
+  const debug = createDebugController({ journal, statePath, now });
   function remember(snapshot) {
     const ids = new Set(notifications.map(item => item.id));
     for (const entry of snapshot.notifications ?? []) if (!ids.has(entry.id)) {
@@ -202,7 +205,7 @@ export async function createAchievementJournal(ctx, config = {}) {
     const diagnostics = collector.diagnostics();
     const auxiliary = generation?.accounting?.() ?? { knownTokens: 0, unknownCalls: 0, observedCalls: 0 };
     const degraded = ingestFailures > 0 || diagnostics.ingestErrors > 0 || diagnostics.boundedDrops > 0 || diagnostics.droppedQueue > 0;
-    return { ...snapshot, notifications: notifications.filter(item => now() - item.seenAt < 300000),
+    return { ...snapshot, debug: { active: false }, notifications: notifications.filter(item => now() - item.seenAt < 300000),
       generation: { ...(generation?.get?.() ?? { job: null }), accounting: auxiliary },
       coverage: { ...(snapshot.coverage ?? {}), mode: 'live_since_installation', since: snapshot.createdAt,
         historyImport: false, capabilities: capabilities(), diagnostics, ingestFailures, degraded,
@@ -211,6 +214,12 @@ export async function createAchievementJournal(ctx, config = {}) {
           ...(degraded ? ['部分事件未能入账或达到记录上限；当前数字为已记录下界，请检查存储状态。'] : []),
           ...(auxiliary.unknownCalls > 0 ? ['部分成就生成调用缺少完整用量回执，累计只包含已记录用量。'] : []),
           ...(storageUnavailable ? ['档案暂不可用，原始数据已保留；恢复存储后重新启用。'] : [])] } };
+  }
+  function debugState(token, snapshot = debug.get(token).snapshot()) {
+    return { ...snapshot, debug: { active: true, sessionId: token, label: '调试模式' },
+      generation: { job: null, accounting: { knownTokens: 0, unknownCalls: 0, observedCalls: 0 } },
+      coverage: { ...(snapshot.coverage ?? {}), mode: 'debug_sandbox', historyImport: false,
+        notes: ['调试操作只影响独立临时档案；真实工作记录继续单独累积。'] } };
   }
   function context(exec) {
     if (!exec.agent) throw error('需要来自当前工作会话的调用。');
@@ -303,39 +312,65 @@ export async function createAchievementJournal(ctx, config = {}) {
         if ('rejection' in admission) return json(res, admission.rejection, { error: '需要 DSH 浏览器登录。' });
         if (admission.peer.id !== ctx.connection.browserPeer.id) return json(res, 403, { error: '仅当前浏览器用户可访问。' });
         const url = new URL(req.url, 'http://local'); const path = url.pathname;
-        if (req.method === 'GET' && path === API + '/state') return json(res, 200, state());
+        if (await servePortraitAsset(req, res, url)) return;
+        const scope = req.headers['x-daj-debug'];
+        if (scope !== undefined && (typeof scope !== 'string' || !scope.trim())) throw error('调试会话无效，请退出后重新进入。', 409, 'DEBUG_SCOPE_EXPIRED');
+        if (req.method === 'GET' && path === API + '/state') return json(res, 200, scope ? debugState(scope) : state());
         if (req.method === 'GET' && path === API + '/catalog') {
+          if (scope) return json(res, 200, { ...debug.get(scope).catalog(), debug: { active: true }, capabilities: capabilities(),
+            generation: { available: false, reason: '调试模式不调用模型。请退出调试后生成。', activeJob: null } });
           const sessionId = url.searchParams.get('sessionId') || undefined;
           let agent; try { agent = sessionId ? optionalService(ctx, 'agents')?.get?.(sessionId) : undefined; } catch { /* use the default/global view */ }
           return json(res, 200, { ...catalog(agent), generation: await generation.info({ sessionId }) });
         }
-        if (req.method === 'GET' && path === API + '/generation') return json(res, 200, generation.get(url.searchParams.get('id') || undefined));
+        if (req.method === 'GET' && path === API + '/generation') {
+          if (scope) { debug.get(scope); return json(res, 200, { job: null }); }
+          return json(res, 200, generation.get(url.searchParams.get('id') || undefined));
+        }
         if (req.method === 'POST') {
           if (req.headers['sec-fetch-site'] === 'cross-site') throw error('拒绝跨站写入。', 403);
           if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host) throw error('来源不匹配。', 403);
+          if ([API + '/debug/start', API + '/debug/reset', API + '/debug/exit'].includes(path)) {
+            const body = await bodyOf(req);
+            if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length) throw error('调试管理操作不接受附加数据。');
+            if (path.endsWith('/start')) { const started = await debug.start(); return json(res, 200, { token: started.token, snapshot: debugState(started.token, started.snapshot) }); }
+            if (path.endsWith('/reset')) { const reset = await debug.reset(scope); return json(res, 200, { token: reset.token, snapshot: debugState(reset.token, reset.snapshot) }); }
+            await debug.exit(scope); return json(res, 200, { debug: null });
+          }
+          if (path === API + '/debug/action') {
+            const body = await bodyOf(req); const snapshot = debugState(scope, await debug.action(scope, body));
+            return json(res, 200, body.action === 'draw' ? { ...snapshot, draw: debug.get(scope).drawReceipt(body.requestId) } : snapshot);
+          }
+          if (scope && [API + '/generation', API + '/generation/cancel'].includes(path)) {
+            debug.get(scope); throw error('调试模式不调用模型。请退出调试后生成。', 409, 'DEBUG_GENERATION_DISABLED');
+          }
           if (path === API + '/generation') return json(res, 200, await generation.start(await bodyOf(req)));
           if (path === API + '/generation/cancel') { const body = await bodyOf(req); return json(res, 200, await generation.cancel(body.id)); }
           if (path === API + '/draw') {
-            const body = await bodyOf(req); const snapshot = await mutate('draw', body);
-            return json(res, 200, { ...snapshot, draw: journal.drawReceipt(body.requestId) });
+            const body = await bodyOf(req); const snapshot = scope ? debugState(scope, await debug.mutate(scope, 'draw', body)) : await mutate('draw', body);
+            return json(res, 200, { ...snapshot, draw: scope ? debug.get(scope).drawReceipt(body.requestId) : journal.drawReceipt(body.requestId) });
           }
-          if (path === API + '/characters') return json(res, 200, await mutate('configureCharacters', await bodyOf(req, 3 * 1024 * 1024)));
+          if (path === API + '/characters') {
+            const body = await bodyOf(req, 3 * 1024 * 1024);
+            return json(res, 200, scope ? debugState(scope, await debug.mutate(scope, 'configureCharacters', body)) : await mutate('configureCharacters', body));
+          }
           const method = ({ preferences: 'preferences', equip: 'equip', configure: 'configure', report: 'report' })[path.slice(API.length + 1)];
-          if (method) return json(res, 200, await mutate(method, await bodyOf(req)));
+          if (method) { const body = await bodyOf(req); return json(res, 200, scope ? debugState(scope, await debug.mutate(scope, method, body)) : await mutate(method, body)); }
         }
         return json(res, 404, { error: '接口不存在。' });
       } catch (e) {
         const code = String(e.code);
         const storageError = ['PERSISTENCE_FAILED', 'DURABILITY_UNCERTAIN', 'CORRUPT_STATE', 'SCHEMA_UNSUPPORTED', 'LOCK_HELD', 'CLOSED', 'BUDGET_EXCEEDED', 'COUNTER_OVERFLOW'].includes(code);
         const status = e.status ?? (storageError ? 503 : /CONFLICT|ARCHIVED|IMMUTABLE|REQUEST_ID_REUSED|INSUFFICIENT_POINTS|NOT_OWNED/.test(code) ? 409 : e.name === 'JournalError' || code.includes('INVALID') ? 400 : 500);
-        json(res, status, { error: COLLECTION_ERRORS[code] || (code.startsWith('GENERATION_') || status < 500 ? e.message : '成就存储暂不可用，已保留原档案，请查看宿主日志。'), code: e.code ?? 'JOURNAL_UNAVAILABLE' });
+        json(res, status, { error: COLLECTION_ERRORS[code] || (code.startsWith('GENERATION_') || code.startsWith('DEBUG_') || status < 500 ? e.message : '成就存储暂不可用，已保留原档案，请查看宿主日志。'), code: e.code ?? 'JOURNAL_UNAVAILABLE' });
       }
     } }));
   }
-  return { journal, collector, generation, snapshot: state, catalog, mutate,
+  return { journal, collector, generation, debug, snapshot: state, catalog, mutate,
     async dispose() {
       if (disposed || closing) return; closing = true;
       for (const dispose of disposers.reverse()) await dispose?.();
+      await debug.dispose();
       await generation.dispose();
       await collector.dispose(); disposed = true; await journal.close(); notifications = [];
     },

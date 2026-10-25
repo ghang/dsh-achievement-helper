@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { THEME_IDS as THEMES, ICON_IDS as ICONS, FRAME_STYLES, COLLECTION_LIMITS, ACHIEVEMENT_THEME_TITLES,
+import { THEME_IDS as THEMES, ICON_IDS as ICONS, RARITIES, FRAME_STYLES, COLLECTION_LIMITS, ACHIEVEMENT_THEME_TITLES,
   collectionCatalog, freshCollection, syncCollectionPoints, validateCollection, configureCollectionCharacters, drawCollection } from './collection.mjs';
 
 const VERSION = 2;
@@ -117,7 +117,7 @@ function validateStored(state) {
     object(state, 'stored state');
     if (![1, VERSION].includes(state.schemaVersion)) fail('SCHEMA_UNSUPPORTED', 'The saved journal schema is unsupported.');
     const legacy = state.schemaVersion === 1, themeIds = legacy ? LEGACY_THEMES : THEMES, iconIds = legacy ? LEGACY_ICONS : ICONS;
-    fields(state, ['schemaVersion', 'revision', 'createdAt', 'updatedAt', 'preferences', 'counts', 'sets', 'facts', 'pending', 'requests', 'definitions', 'awards', 'timeline', 'equipment', 'usage', 'usageMissing', 'firstFactAt', 'lastFactAt', ...legacy ? [] : ['collection']], 'stored state');
+    fields(state, ['schemaVersion', 'revision', 'createdAt', 'updatedAt', 'preferences', 'counts', 'sets', 'facts', 'pending', 'requests', 'definitions', 'awards', 'timeline', 'equipment', 'usage', 'usageMissing', 'firstFactAt', 'lastFactAt', ...legacy ? [] : ['collection'], ...state.debug === true ? ['debug'] : []], 'stored state');
     integer(state.revision, 'revision'); integer(state.createdAt, 'createdAt'); integer(state.updatedAt, 'updatedAt');
     fields(state.preferences, ['theme', 'notifications', 'reducedMotion', ...legacy ? [] : ['frameStyle', 'frameHeight']], 'preferences');
     option(state.preferences.theme, themeIds, 'theme'); option(state.preferences.notifications, ['all', 'unlocks', 'off'], 'notifications'); option(state.preferences.reducedMotion, ['system', 'reduce', 'full'], 'reducedMotion');
@@ -127,7 +127,7 @@ function validateStored(state) {
     assertHashMap(state.facts, 'fact identities', value => { if (typeof value !== 'string' || !HASH.test(value)) fail('CORRUPT_STATE', 'Invalid fact fingerprint.'); });
     assertHashMap(state.pending, 'pending identities', value => { fields(value, ['kind', 'at', 'workspaceKey'], 'pending fact'); option(value.kind, KINDS, 'pending metric'); integer(value.at, 'pending time'); if (value.workspaceKey !== undefined) opaque(value.workspaceKey, 'workspace key'); });
     for (const id of Object.keys(state.pending)) if (has(state.facts, id)) fail('CORRUPT_STATE', 'An identity is both settled and pending.');
-    assertHashMap(state.requests, 'request identities', value => { fields(value, ['method', 'fingerprint'], 'request'); option(value.method, ['configure', 'report', ...legacy ? [] : ['draw', 'configureCharacters']], 'request method'); if (!HASH.test(value.fingerprint)) fail('CORRUPT_STATE', 'Invalid request fingerprint.'); });
+    assertHashMap(state.requests, 'request identities', value => { fields(value, ['method', 'fingerprint'], 'request'); option(value.method, ['configure', 'report', ...legacy ? [] : ['draw', 'configureCharacters'], ...state.debug === true ? ['debugAction'] : []], 'request method'); if (!HASH.test(value.fingerprint)) fail('CORRUPT_STATE', 'Invalid request fingerprint.'); });
     if (!Array.isArray(state.definitions) || !Array.isArray(state.awards) || !Array.isArray(state.timeline)) fail('CORRUPT_STATE', 'Collections must be arrays.');
     const ids = new Set();
     for (const d of state.definitions) {
@@ -245,7 +245,7 @@ function publicSnapshot(state, notifications, storageStatus) {
   const totals = { tokens: count('tokens'), knownTokens, turns: count('turn_completed'), fileReads: count('file_read'), fileChanges: count('file_changed'), formats: distinct('format_read'), skills: distinct('skill_loaded'), delegations: count('delegate_completed'), presentations: count('file_presented'), routes: distinct('route_used'), recalls: count('recall_used'), byMetric: Object.fromEntries(KINDS.map(kind => [kind, count(kind)])) };
   totals.usage = Object.fromEntries(USAGE_FIELDS.map(key => [key, key === 'totalTokens' ? totals.tokens : state.usageMissing[key] ? null : state.usage[key] ?? (knownTokens === 0 && !pendingByMetric.tokens ? 0 : null)]));
   const definitions = state.definitions.map(d => ({ id: d.id, title: d.title, description: d.description, icon: d.icon, category: d.category, source: d.source, configuredBy: d.configuredBy, rule: clone(d.rule), scope: d.scope, ...(d.workspaceKey ? { workspaceKey: d.workspaceKey } : {}), baseline: d.baseline, baselineAt: d.baselineAt, hidden: d.hidden, revision: d.revision, status: d.status, progress: (d.frozenIncomplete || Object.keys(d.unknown).length) && d.value < d.rule.target ? null : d.value, knownProgress: d.value, target: d.rule.target, progressRatio: Math.min(1, d.value / d.rule.target), incomplete: d.frozenIncomplete || Object.keys(d.unknown).length > 0, ...(d.unlockedAt !== undefined ? { unlockedAt: d.unlockedAt } : {}), themes: clone(d.themes) }));
-  return clone({ revision: state.revision, createdAt: state.createdAt, updatedAt: state.updatedAt, preferences: state.preferences, totals, level: levelFor(knownTokens, !!pendingByMetric.tokens), definitions, awards: state.awards, timeline: [...state.timeline].sort((a, b) => b.at - a.at || b.id.localeCompare(a.id)), notifications, equipment: state.equipment, collection: state.collection, coverage: { mode: 'observed_facts', startedAt: state.createdAt, firstFactAt: state.firstFactAt, lastFactAt: state.lastFactAt, pendingFacts: Object.keys(state.pending).length, pendingByMetric, complete: Object.keys(state.pending).length === 0, historyComplete: false, scope: 'collector_supplied', note: 'Coverage includes only facts actually supplied by the collector; account-wide history is not implied.' }, storage: { schemaVersion: VERSION, status: storageStatus, atomic: true, writer: 'exclusive_lock_single_process', limits: JOURNAL_LIMITS, usage: { facts: Object.keys(state.facts).length, pendingFacts: Object.keys(state.pending).length, requests: Object.keys(state.requests).length, definitions: state.definitions.length, awards: state.awards.length, characters: state.collection.characters.length, draws: state.collection.draws.length } } });
+  return clone({ ...state.debug === true ? { debug: true } : {}, revision: state.revision, createdAt: state.createdAt, updatedAt: state.updatedAt, preferences: state.preferences, totals, level: levelFor(knownTokens, !!pendingByMetric.tokens), definitions, awards: state.awards, timeline: [...state.timeline].sort((a, b) => b.at - a.at || b.id.localeCompare(a.id)), notifications, equipment: state.equipment, collection: state.collection, coverage: { mode: 'observed_facts', startedAt: state.createdAt, firstFactAt: state.firstFactAt, lastFactAt: state.lastFactAt, pendingFacts: Object.keys(state.pending).length, pendingByMetric, complete: Object.keys(state.pending).length === 0, historyComplete: false, scope: 'collector_supplied', note: 'Coverage includes only facts actually supplied by the collector; account-wide history is not implied.' }, storage: { schemaVersion: VERSION, status: storageStatus, atomic: true, writer: 'exclusive_lock_single_process', limits: JOURNAL_LIMITS, usage: { facts: Object.keys(state.facts).length, pendingFacts: Object.keys(state.pending).length, requests: Object.keys(state.requests).length, definitions: state.definitions.length, awards: state.awards.length, characters: state.collection.characters.length, draws: state.collection.draws.length } } });
 }
 async function atomicWrite(file, data) {
   const serialized = JSON.stringify(data);
@@ -275,8 +275,8 @@ async function acquireLock(file, at) {
   return async () => { try { const current = JSON.parse(await readFile(lockFile, 'utf8')); if (current.token === token) await unlink(lockFile); } catch (error) { if (error.code !== 'ENOENT') throw new JournalError('LOCK_RELEASE_FAILED', 'The journal writer lock could not be released.'); } };
 }
 
-export async function createJournal({ file, now = Date.now, randomInt } = {}) {
-  if (typeof file !== 'string' || !file.trim() || typeof now !== 'function' || randomInt !== undefined && typeof randomInt !== 'function') fail('INVALID_INPUT', 'A journal file, clock and optional random function are required.');
+export async function createJournal({ file, now = Date.now, randomInt, allowDebug = false } = {}) {
+  if (typeof file !== 'string' || !file.trim() || typeof now !== 'function' || randomInt !== undefined && typeof randomInt !== 'function' || typeof allowDebug !== 'boolean') fail('INVALID_INPUT', 'A journal file, clock and optional random/debug controls are required.');
   const path = resolve(file), clock = () => integer(now(), 'clock time');
   await mkdir(dirname(path), { recursive: true });
   const release = await acquireLock(path, clock());
@@ -285,7 +285,7 @@ export async function createJournal({ file, now = Date.now, randomInt } = {}) {
     let data;
     try { data = await readFile(path, 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw new JournalError('PERSISTENCE_FAILED', 'The saved journal could not be read.'); }
     if (data === undefined) { state = fresh(clock()); await atomicWrite(path, state); }
-    else { try { state = JSON.parse(data); } catch { fail('CORRUPT_STATE', 'The saved journal is not valid JSON; it was not reset or overwritten.'); } validateStored(state); if (state.schemaVersion === 1) { state = migrateLegacy(state); validateStored(state); await atomicWrite(path, state); } }
+    else { try { state = JSON.parse(data); } catch { fail('CORRUPT_STATE', 'The saved journal is not valid JSON; it was not reset or overwritten.'); } if (state?.debug === true && !allowDebug) fail('DEBUG_ARCHIVE_FORBIDDEN', 'A debug archive cannot be opened as a real achievement journal.'); validateStored(state); if (state.schemaVersion === 1) { state = migrateLegacy(state); validateStored(state); await atomicWrite(path, state); } }
   } catch (error) { await release(); throw error; }
   let tail = Promise.resolve(), closing = false, closePromise, storageStatus = 'ready';
   const snapshot = () => publicSnapshot(state, [], storageStatus);
@@ -319,6 +319,40 @@ export async function createJournal({ file, now = Date.now, randomInt } = {}) {
   }
   return {
     snapshot,
+    debugAction(input) {
+      // Capability denial precedes argument validation, including empty input.
+      if (state.debug !== true) return Promise.reject(new JournalError('DEBUG_ONLY', 'Debug actions require an explicitly marked isolated archive.', { status: 403 }));
+      try {
+        fields(input, ['requestId', 'action', 'definitionId', 'theme', 'charm'], 'debug action'); input = clone(input);
+        option(input.action, ['complete', 'complete_all', 'draw', 'charm'], 'debug action');
+        if (input.definitionId !== undefined && input.action !== 'complete' || input.theme !== undefined && input.action !== 'draw' || input.charm !== undefined && input.action !== 'charm') fail('INVALID_INPUT', 'Debug action contains unrelated controls.');
+      } catch (error) { return Promise.reject(error); }
+      return mutate((next, at) => {
+        // Draw receipts use the ordinary durable draw identity so ownership and
+        // point validation remains identical even inside the isolated archive.
+        if (!request(next, input.action === 'draw' ? 'draw' : 'debugAction', input, { source: 'debug' })) return { changed: false };
+        const notifications = [];
+        const complete = d => {
+          if (!d) fail('NOT_FOUND', 'There is no unfinished active achievement to complete.');
+          if (d.status !== 'active') fail('ARCHIVED', 'An archived achievement cannot be completed in debug mode.');
+          d.value = Math.max(d.value, d.rule.target); d.unknown = {}; d.frozenIncomplete = false;
+          const notice = award(next, d, at, d.rule.template === 'model_report' ? 'user_record' : 'automatic', { source: 'user' });
+          if (notice) notifications.push(notice);
+        };
+        const first = () => next.definitions.find(d => d.status === 'active' && d.unlockedAt === undefined);
+        if (input.action === 'complete') complete(input.definitionId === undefined ? first() : next.definitions.find(d => d.id === opaque(input.definitionId, 'definition id')));
+        else if (input.action === 'complete_all') { for (const d of next.definitions) if (d.status === 'active' && d.unlockedAt === undefined) complete(d); }
+        else if (input.action === 'charm') next.equipment.charm = option(input.charm ?? 'star', ['compass', 'star', 'leaf'], 'debug charm');
+        else {
+          if (next.collection.points.balance < 1) complete(first());
+          syncCollectionPoints(next.collection, next.awards);
+          drawCollection(next.collection, { requestHash: hash(input.requestId), theme: input.theme ?? next.preferences.theme, at, randomInt });
+          const results = next.collection.draws.at(-1).results;
+          next.equipment.character = results.reduce((best, item) => RARITIES.indexOf(item.rarity) > RARITIES.indexOf(best.rarity) ? item : best).id;
+        }
+        return { changed: true, notifications };
+      });
+    },
     catalog() { return clone({ schemaVersion: VERSION, metricIds: KINDS, metrics: KINDS.map(id => ({ id, unit: id === 'tokens' ? 'tokens' : 'events', keyRequired: KEYED.has(id), templates: id === 'recipe' ? ['recipe'] : ['first_seen', 'count', ...(KEYED.has(id) ? ['distinct'] : [])], evidence: 'collector_verified' })), templates: TEMPLATES, recipes: RECIPES, themeIds: THEMES, iconIds: ICONS, scopes: ['all', 'current_workspace'], defaultBaseline: 'after_configuration', notificationModes: ['all', 'unlocks', 'off'], reducedMotionModes: ['system', 'reduce', 'full'], equipment: { badgeSlots: 3, charms: ['compass', 'star', 'leaf'], characterSlots: 1 }, collection: collectionCatalog(), limits: JOURNAL_LIMITS, defaultDefinitionCount: 16, levelRule: { version: 1, description: 'Level = 1 + floor(sqrt(recorded tokens / 100000)); display proposal, not a productivity score.' } }); },
     drawReceipt(requestId) { const id = hash(opaque(requestId, 'requestId')); return clone(state.collection.draws.find(draw => draw.requestId === id) ?? null); },
     draw(input) {
