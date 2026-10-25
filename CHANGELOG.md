@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0-rc.5
+
+Update the eight xianxia display ranks without changing archived card identities.
+Show each card’s base probability and exact next-ten average including guarantees.
+Keep the ten-pull SR guarantee and add a per-theme fifty-card hard SSR pity,
+derived from existing receipts; every SSR resets it and appearance changes do
+not. Add browser display-name overrides and reset for all achievements and
+characters, including presets, while retaining original conditions, progress,
+earned snapshots, spending and ownership. Renaming stays isolated in debug.
+Old archives are not rewritten on read; downgrading after a name save requires
+the matching complete plugin-storage backup. Four model tool schemas remain
+unchanged.
+
 ## 0.2.0-rc.4
 
 Add independent flat/pixel appearance selection for all ten themes, with twenty

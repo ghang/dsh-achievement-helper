@@ -40,12 +40,13 @@ function harness(initial = journal(), options = {}) {
   const timers = new Map(), frames = new Map(), requests = [], records = [], effects = [], cleanupCallbacks = [];
   const documentEvents = new Map(), windowEvents = new Map(), copied = [];
   const sessionListeners = new Set();
-  const mediaListeners = new Set(), storage = options.storage ?? new Map(), drawReceipts = new Map(), generationReceipts = new Map();
+  const mediaListeners = new Set(), storage = options.storage ?? new Map(), drawReceipts = new Map(), generationReceipts = new Map(), renameReceipts = new Map();
   const debugStates = new Map();
   const debugTemplate = options.debugTemplate ?? journal({ definitions: [definition()], collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: ['explorer', 'xianxia', 'cyber', 'wuxia', 'fantasy', 'space', 'ocean', 'garden', 'academy', 'steampunk'].map(theme => character({ id: theme === 'explorer' ? 'hero' : 'hero-' + theme, theme })), owned: [], draws: [] } });
   const server = { state: clone(initial), sessionKey: options.sessionKey, uiSessionGetterReads: 0, wide: true, job: options.job ? clone(options.job) : null, failGenerationStart: null, failGenerationStartCode: 'GENERATION_UNAVAILABLE', failGenerationGet: null,
     generationWrites: 0, failGenerationAfterCommit: false, failGenerationAfterCommitCode: null,
     drawWrites: 0, failDrawAfterCommit: false, failDrawAfterCommitCode: null, systemReduce: false, canvasDraws: 0,
+    renameWrites: 0, failRenameCode: null, failRenameAfterCommit: false, failRenameAfterCommitCode: null,
     debugStates, ignoreStateAbort: false, images: [], imageErrors: new Set(options.imageErrors ?? []),
     failState: null, hangState: false, deferNextState: false, failPost: null, failCatalog: null,
     catalog: { metrics: [{ id: 'tokens' }, { id: 'file_read' }, { id: 'recipe' }], templates: ['count', 'model_report'], equipment: { charms: ['compass', 'star', 'leaf'] },
@@ -189,6 +190,29 @@ function harness(initial = journal(), options = {}) {
         if (server.failDrawAfterCommit) { server.failDrawAfterCommit = false; throw new Error('connection lost after commit'); }
       }
       response = { ...decorate(target), draw: clone(drawReceipts.get(body.requestId)) };
+    } else if (path === '/rename') {
+      const body = JSON.parse(options.body), key = (token || 'real') + ':' + body.requestId;
+      const previous = renameReceipts.get(key);
+      if (previous && previous !== options.body) return { ok: false, status: 409, json: async () => ({ code: 'REQUEST_ID_REUSED', error: '原请求参数不得改变' }) };
+      if (!previous) {
+        if (server.failRenameCode) return { ok: false, status: 409, json: async () => ({ code: server.failRenameCode, error: '名字未保存，请同步后重试' }) };
+        if (body.expectedRevision !== target.revision) return { ok: false, status: 409, json: async () => ({ code: 'REVISION_CONFLICT', error: '档案已变化，请同步后重试' }) };
+        const item = (body.kind === 'character' ? target.collection.characters : target.definitions).find(item => item.id === body.id);
+        assert.ok(item, 'Rename fixture needs an existing target');
+        if (body.kind === 'character') {
+          item.defaultName ??= item.name;
+          if (body.name === null) delete item.customName; else item.customName = body.name;
+          item.name = item.customName || item.defaultName;
+        } else {
+          for (const record of [item, ...target.awards.filter(entry => entry.definitionId === body.id), ...target.timeline.filter(entry => entry.definitionId === body.id), ...target.notifications.filter(entry => entry.definitionId === body.id)]) {
+            if (body.name === null) delete record.customName; else record.customName = body.name;
+          }
+        }
+        target.revision += 1; server.renameWrites += 1; renameReceipts.set(key, options.body);
+        if (server.failRenameAfterCommitCode) { const code = server.failRenameAfterCommitCode; server.failRenameAfterCommitCode = null; return { ok: false, status: 503, json: async () => ({ code, error: '保存结果尚未确认' }) }; }
+        if (server.failRenameAfterCommit) { server.failRenameAfterCommit = false; throw new Error('connection lost after rename'); }
+      }
+      response = decorate(target);
     } else if (options.method === 'POST') {
       if (server.failPost) return { ok: false, status: 409, json: async () => ({ error: server.failPost }) };
       const body = JSON.parse(options.body);
@@ -202,7 +226,7 @@ function harness(initial = journal(), options = {}) {
       if (path === '/delete') target.definitions = target.definitions.map(item => body.ids?.includes(item.id) ? { ...item, status: 'archived' } : item);
       if (path === '/characters') for (const declared of body.characters) {
         const previous = target.collection.characters.find(item => item.id === declared.id);
-        if (previous) Object.assign(previous, declared);
+        if (previous) { Object.assign(previous, declared); previous.defaultName = declared.name; previous.name = previous.customName || declared.name; }
         else target.collection.characters.push({ ...declared, id: `user-${++nextId}`, source: 'user' });
       }
       target.revision += 1;
@@ -1079,4 +1103,161 @@ test('only explicit unaccepted generation errors release intent; uncertain stora
   const posts = other.requests.filter(item => item.url.endsWith('/generation') && item.options.method === 'POST');
   assert.equal(posts.length, 2); assert.equal(posts[0].options.body, posts[1].options.body);
   assert.equal(other.server.generationWrites, 1); assert.equal(other.state().generationPending, false);
+});
+
+test('each pool card uses server rates and the current theme SSR progress without confusing ten-pull averages with occurrence odds', async t => {
+  const collection = {
+    points: { earned: 1, spent: 0, balance: 1 }, characters: [character({ id: 'normal', name: '旅途常客', rarity: 'N' }), character({ id: 'rare', name: '远行向导', rarity: 'R' })], owned: [], draws: [],
+    drawInfo: { theme: 'explorer', drawSize: 10, baseRates: { N: .6, R: .28, SR: .1, SSR: .02 }, tenPullRates: { N: .56, R: .27, SR: .07, SSR: .1 },
+      characterRates: [{ id: 'normal', baseRate: .2, tenPullRate: .186666666666 }, { id: 'rare', baseRate: .093333333333, tenPullRate: .09 }],
+      pity: { limit: 50, sinceSSR: 49, remaining: 1 }, guarantee: { drawSize: 10, minimumRarity: 'SR' } },
+  };
+  const app = harness(journal({ collection })); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏'); app.click('全部卡池');
+  const rates = name => app.nodes().find(node => node.props?.['aria-label'] === name + '抽取概率');
+  assert.match(app.textContent(rates('旅途常客')), /基础单抽 20% 下次十连均率 18\.67%/);
+  assert.match(app.textContent(rates('远行向导')), /基础单抽 9\.33% 下次十连均率 9%/);
+  assert.match(app.textContent(), /十个位置平均单张概率/); assert.doesNotMatch(app.textContent(), /至少一次|20\.00%|NaN%/);
+  assert.match(app.textContent(), /SSR 保底：已累计 49 抽 \/ 最多再 1 抽/); assert.match(app.textContent(), /下 1 抽必出 SSR/);
+  let progress = app.nodes().find(node => node.props?.['aria-label'] === 'SSR 保底进度');
+  assert.equal(progress.props['aria-valuenow'], 49); assert.equal(progress.props['aria-valuemax'], 50);
+  app.server.state.collection.drawInfo.pity.sinceSSR = 73; app.server.state.revision += 1; await app.advance(1800);
+  progress = app.nodes().find(node => node.props?.['aria-label'] === 'SSR 保底进度');
+  assert.equal(progress.props['aria-valuenow'], 50); assert.match(app.textContent(), /已累计 73 抽 \/ 最多再 1 抽/);
+  assert.equal(app.nodes(progress).find(node => node.type === 'i').props.style.width, '100%');
+  app.change('daj-global-portrait-style', 'pixel'); await app.ready();
+  assert.match(app.textContent(), /已累计 73 抽/);
+  app.change('daj-global-theme', 'garden'); await app.ready();
+  assert.ok(!app.nodes().some(node => node.props?.['aria-label'] === 'SSR 保底进度'), 'Never show another theme stale drawInfo');
+});
+
+test('legacy snapshots omit unavailable probability and pity data while keeping universal character rename controls', async t => {
+  const app = harness(journal({ collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [character()], owned: [], draws: [] } }));
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏'); app.click('全部卡池');
+  assert.doesNotMatch(app.textContent(), /NaN|undefined|SSR 保底：|基础单抽/);
+  app.click('改名 山海小狐');
+  const input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 山海小狐');
+  assert.equal(input.props.maxLength, 60); assert.match(app.textContent(), /名字跨主题通用，只影响显示/);
+  assert.ok(!app.nodes().some(node => node.type === 'button' && node.props?.['aria-label'] === '编辑角色 山海小狐'));
+});
+
+test('builtin and custom character renames are display overrides that preserve portraits, ownership and saved equipment', async t => {
+  const builtin = character({ defaultName: '山海小狐' }), custom = character({ id: 'custom-friend', name: '自定同伴', defaultName: '自定同伴', source: 'user', art: PIXEL_PNG });
+  const collection = { points: { earned: 3, spent: 1, balance: 2 }, characters: [builtin, custom], owned: [{ id: builtin.id, count: 2, firstAt: 100 }, { id: custom.id, count: 1, firstAt: 101 }], draws: [{ requestId: 'saved', theme: 'explorer', at: 100, results: [{ id: builtin.id, rarity: 'SR', isNew: false }, { id: custom.id, rarity: 'SR', isNew: true }] }] };
+  const equipment = { badges: [], charm: null, character: builtin.id };
+  const app = harness(journal({ collection, equipment })); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('角色收藏');
+  for (const [item, renamed] of [[builtin, '跨题材小狐'], [custom, '我的同伴']]) {
+    app.click('改名 ' + item.name);
+    const input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 ' + item.name);
+    app.change(input.props.id, '  ' + renamed + '  '); app.click('保存名字 ' + item.name); await app.ready();
+    const request = app.requests.filter(entry => entry.url.endsWith('/rename')).at(-1), body = JSON.parse(request.options.body);
+    assert.equal(body.kind, 'character'); assert.equal(body.id, item.id); assert.equal(body.name, renamed); assert.ok(body.requestId); assert.ok(Number.isSafeInteger(body.expectedRevision));
+    assert.equal(request.options.headers['x-daj-debug'], undefined);
+    const saved = app.state().data.collection.characters.find(entry => entry.id === item.id);
+    assert.equal(saved.name, renamed); assert.equal(saved.customName, renamed); assert.equal(saved.defaultName, item.name); assert.equal(saved.art, item.art);
+    assert.deepEqual(app.state().data.collection.owned, collection.owned); assert.deepEqual(app.state().data.collection.points, collection.points); assert.deepEqual(app.state().data.equipment, equipment);
+    const results = app.nodes().find(node => node.props?.['aria-label'] === '十连抽取结果'); assert.match(app.textContent(results), new RegExp(renamed));
+  }
+  const frame = app.nodes().find(node => node.type === 'button' && node.props?.['aria-label'] === '打开成就手记'); assert.match(app.textContent(frame), /跨题材小狐/);
+  app.click('编辑角色 我的同伴'); assert.equal(app.nodes().find(node => node.props?.id === 'daj-character-name').props.value, '自定同伴', 'Appearance editor retains the canonical custom name');
+  app.click('返回角色收藏'); app.click('改名 跨题材小狐'); app.click('恢复原名 跨题材小狐'); await app.ready();
+  assert.equal(JSON.parse(app.requests.filter(entry => entry.url.endsWith('/rename')).at(-1).options.body).name, null);
+  assert.equal(app.state().data.collection.characters[0].name, '山海小狐'); assert.equal(app.state().data.collection.characters[0].customName, undefined);
+});
+
+test('achievement custom names override theme aliases in search, badges, frame, history, notifications and configuration summaries', async t => {
+  const built = definition({ defaultTitle: '第一眼', unlockedAt: 3, themes: { xianxia: { title: '初窥山海', description: '翻阅仙卷' } } });
+  const custom = definition({ id: 'custom-goal', title: '原始目标', defaultTitle: '原始目标', source: 'model', themes: { xianxia: { title: '自选仙缘' } } });
+  const award = { id: 'award:first-read', definitionId: built.id, title: '旧获得标题', defaultTitle: '旧获得标题', at: 3, themes: built.themes, source: 'automatic' };
+  const app = harness(journal({ definitions: [built, custom], awards: [award], equipment: { badges: [built.id], charm: built.id, character: null }, timeline: [{ id: 'entry', definitionId: built.id, awardId: award.id, kind: 'unlock', title: '旧历程标题', at: 3 }] }));
+  t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('成就收藏');
+  app.click('改名 第一眼'); let input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 第一眼');
+  app.change(input.props.id, '我的第一卷'); app.click('保存名字 第一眼'); await app.ready();
+  app.change('daj-global-theme', 'xianxia'); await app.ready();
+  assert.match(app.textContent(), /我的第一卷/); assert.doesNotMatch(app.textContent(), /初窥山海/);
+  assert.ok(app.nodes().some(node => node.props?.title === '我的第一卷'), 'Frame badges and charms share the override');
+  const search = app.nodes().find(node => node.props?.['aria-label'] === '搜索成就');
+  search.props.onChange({ target: { value: '我的第一卷' } }); app.render();
+  assert.equal(app.nodes().filter(node => node.props?.className?.includes('daj-badge-tile')).length, 1);
+  app.click('问道年谱'); assert.match(app.textContent(), /我的第一卷/); assert.doesNotMatch(app.textContent(), /旧获得标题|旧历程标题|初窥山海/);
+  app.server.state.notifications.push({ id: 'new-rename-notification', kind: 'unlock', definitionId: built.id, awardId: award.id, title: built.title, customName: '我的第一卷', at: 4 }); app.server.state.revision += 1;
+  await app.advance(2450);
+  let feedback = app.nodes().find(node => node.props?.className?.includes('daj-feedback-copy')); assert.match(app.textContent(feedback), /我的第一卷/);
+  app.click('灵章阁'); app.click('改名 我的第一卷'); app.click('恢复原名 我的第一卷'); await app.ready();
+  assert.match(app.textContent(), /初窥山海/); assert.doesNotMatch(app.textContent(), /我的第一卷/);
+  feedback = app.nodes().find(node => node.props?.className?.includes('daj-feedback-copy')); assert.match(app.textContent(feedback), /初窥山海/);
+  const tile = app.nodes().find(node => node.props?.className?.includes('daj-badge-tile') && app.textContent(node).includes('自选仙缘')); tile.props.onClick(); app.render();
+  app.click('改名 自选仙缘'); input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 自选仙缘'); app.change(input.props.id, '我的自选目标'); app.click('保存名字 自选仙缘'); await app.ready();
+  app.click('自定义生成');
+  const summaryToggle = app.nodes().find(node => node.props?.className === 'daj-summary-toggle'); app.nodes(summaryToggle).find(node => node.type === 'input').props.onChange({ target: { checked: true } }); app.render();
+  const summary = JSON.parse(app.textContent(app.nodes().find(node => node.type === 'pre' && node.props.className === 'daj-config-summary')));
+  assert.equal(summary[0].title, '我的自选目标');
+});
+
+test('rename drafts survive polls and explicit conflicts, but target and theme changes invalidate old callbacks', async t => {
+  const app = harness(journal({ definitions: [definition(), definition({ id: 'another', title: '另一枚' })] })); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('成就收藏');
+  app.click('改名 第一眼'); let input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 第一眼'); app.change(input.props.id, '尚未保存的名字');
+  app.server.state.revision += 1; await app.advance(1800);
+  assert.equal(app.nodes().find(node => node.props?.['aria-label'] === '新名字 第一眼').props.value, '尚未保存的名字');
+  app.server.state.revision += 1; app.click('保存名字 第一眼'); await app.ready();
+  assert.match(app.textContent(), /档案已变化/); assert.equal(app.server.renameWrites, 0);
+  assert.equal(app.nodes().find(node => node.props?.['aria-label'] === '新名字 第一眼').props.value, '尚未保存的名字');
+  app.click('保存名字 第一眼'); await app.ready(); assert.equal(app.server.renameWrites, 1);
+  const requests = app.requests.filter(entry => entry.url.endsWith('/rename')).map(entry => JSON.parse(entry.options.body));
+  assert.notEqual(requests[0].requestId, requests[1].requestId); assert.equal(requests[1].expectedRevision, 3);
+  app.click('改名 尚未保存的名字'); input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 尚未保存的名字'); app.change(input.props.id, '旧主题草稿');
+  const oldSave = app.nodes().find(node => node.props?.['aria-label'] === '保存名字 尚未保存的名字').props.onClick;
+  app.change('daj-global-theme', 'garden'); await app.ready(); const before = app.requests.length; oldSave(); await app.ready(); assert.equal(app.requests.length, before);
+  assert.ok(!app.nodes().some(node => node.type === 'input' && node.props?.['aria-label']?.startsWith('新名字')));
+  app.click('改名 尚未保存的名字');
+  assert.equal(app.nodes().find(node => node.props?.['aria-label'] === '新名字 尚未保存的名字').props.value, '尚未保存的名字');
+  app.nodes().find(node => node.props?.className?.includes('daj-badge-tile') && app.textContent(node).includes('另一枚')).props.onClick(); app.render();
+  assert.ok(!app.nodes().some(node => node.type === 'input' && node.props?.['aria-label']?.startsWith('新名字')));
+});
+
+test('uncertain rename replies lock the draft and replay the exact accepted request despite newer polling revisions', async t => {
+  for (const failure of ['network', 'DURABILITY_UNCERTAIN']) {
+    const app = harness(journal({ definitions: [definition()] })); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('成就收藏'); app.click('改名 第一眼');
+    let input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 第一眼'); app.change(input.props.id, '已提交的名字');
+    if (failure === 'network') app.server.failRenameAfterCommit = true; else app.server.failRenameAfterCommitCode = failure;
+    app.click('保存名字 第一眼'); await app.ready();
+    assert.equal(app.server.renameWrites, 1); assert.match(app.textContent(), /保存结果尚未确认/);
+    input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 第一眼'); assert.equal(input.props.disabled, true);
+    await app.advance(1800); assert.equal(app.state().data.revision, 2);
+    input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 已提交的名字'); assert.equal(input.props.disabled, true); assert.equal(input.props.value, '已提交的名字');
+    app.click('重试这次改名 已提交的名字'); await app.ready();
+    const requests = app.requests.filter(entry => entry.url.endsWith('/rename'));
+    assert.equal(requests.length, 2); assert.equal(requests[0].options.body, requests[1].options.body); assert.equal(app.server.renameWrites, 1);
+    assert.ok(!app.nodes().some(node => node.type === 'input' && node.props?.['aria-label']?.startsWith('新名字')));
+  }
+});
+
+test('debug renames stay scoped and an exited debug editor cannot write the real target through a stale save callback', async t => {
+  const original = journal({ definitions: [definition()], collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [character()], owned: [], draws: [] } });
+  const app = harness(original, { debugTemplate: original }); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('主题与反馈设置'); app.click('进入调试模式'); await app.ready();
+  const token = [...app.server.debugStates.keys()][0]; app.click('主题与反馈设置'); app.click('成就收藏'); app.click('改名 第一眼');
+  let input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 第一眼'); app.change(input.props.id, '调试成就名'); app.click('保存名字 第一眼'); await app.ready();
+  app.click('角色收藏'); app.click('全部卡池'); app.click('改名 山海小狐'); input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 山海小狐'); app.change(input.props.id, '调试角色名'); app.click('保存名字 山海小狐'); await app.ready();
+  assert.ok(app.requests.filter(entry => entry.url.endsWith('/rename')).every(entry => entry.options.headers['x-daj-debug'] === token));
+  assert.equal(app.server.debugStates.get(token).definitions[0].customName, '调试成就名'); assert.equal(app.server.debugStates.get(token).collection.characters[0].customName, '调试角色名'); assert.deepEqual(app.server.state, original);
+  app.click('改名 调试角色名'); input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 调试角色名'); app.change(input.props.id, '不得落入真实');
+  const oldSave = app.nodes().find(node => node.props?.['aria-label'] === '保存名字 调试角色名').props.onClick;
+  app.click('退出调试'); await app.ready(); const before = app.requests.length; oldSave(); await app.ready();
+  assert.equal(app.requests.length, before); assert.deepEqual(app.server.state, original); assert.equal(app.state().debugActive, false);
+});
+
+test('unmodified rename fields follow external names while local drafts survive polling and safe rejections remain editable', async t => {
+  const app = harness(journal({ definitions: [definition()] })); t.after(() => app.cleanup()); await app.ready(); app.click('打开成就中心'); app.click('成就收藏');
+  app.server.state.definitions[0].customName = '另一窗口的名字'; app.server.state.revision += 1; await app.advance(1800);
+  app.click('改名 另一窗口的名字'); let input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 另一窗口的名字'); assert.equal(input.props.value, '另一窗口的名字');
+  app.change(input.props.id, '正在编辑的名字'); app.click('收起改名 另一窗口的名字');
+  app.server.state.definitions[0].customName = '后台更新的名字'; app.server.state.revision += 1; await app.advance(1800);
+  app.click('改名 后台更新的名字'); input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 后台更新的名字'); assert.equal(input.props.value, '正在编辑的名字');
+  for (const code of ['PRIVATE_PATH', 'WORKSPACE_MISMATCH', 'INVALID_INPUT', 'PERSISTENCE_FAILED']) {
+    app.server.failRenameCode = code; app.click('保存名字 后台更新的名字'); await app.ready();
+    input = app.nodes().find(node => node.props?.['aria-label'] === '新名字 后台更新的名字'); assert.equal(input.props.disabled, false); assert.equal(input.props.value, '正在编辑的名字');
+    assert.doesNotMatch(app.textContent(), /保存结果尚未确认/); assert.equal(app.server.renameWrites, 0);
+  }
+  app.server.failRenameCode = null; app.click('保存名字 后台更新的名字'); await app.ready(); assert.equal(app.server.renameWrites, 1);
+  const requests = app.requests.filter(entry => entry.url.endsWith('/rename')).map(entry => JSON.parse(entry.options.body));
+  assert.equal(new Set(requests.map(entry => entry.requestId)).size, requests.length);
 });

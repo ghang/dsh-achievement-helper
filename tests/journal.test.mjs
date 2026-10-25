@@ -11,6 +11,7 @@ const fact = (id, kind, changes = {}) => ({ id, kind, at: 1000, sessionId: 'sess
 const card = (snapshot, id) => snapshot.definitions.find(d => d.id === id);
 const definition = (id, rule, changes = {}) => ({ id, title: `个人目标 ${id}`, description: '记录一段个人经历', rule, ...changes });
 const errorCode = code => error => error.code === code;
+const canonicalCopy = items => items.map(({ defaultTitle, customName, ...item }) => item);
 
 async function fixture(t, initialNow = 1000) {
   const directory = await mkdtemp(join(tmpdir(), 'achievement-journal-test-'));
@@ -63,7 +64,7 @@ test('an existing schema two archive without portrait style projects flat withou
   const oldBytes = JSON.stringify(old, null, 2) + '\n'; await writeFile(f.file, oldBytes);
   await f.reopen(); const before = f.j.snapshot();
   assert.equal(before.preferences.portraitStyle, 'flat'); assert.equal(before.revision, old.revision);
-  assert.deepEqual(before.awards, old.awards); assert.deepEqual(before.collection.points, old.collection.points);
+  assert.deepEqual(canonicalCopy(before.awards), old.awards); assert.deepEqual(before.collection.points, old.collection.points);
   before.preferences.portraitStyle = 'pixel'; assert.equal(f.j.snapshot().preferences.portraitStyle, 'flat');
   await f.j.ingest([]); f.j.catalog(); await f.reopen();
   assert.equal(await readFile(f.file, 'utf8'), oldBytes);
@@ -73,7 +74,7 @@ test('an existing schema two archive without portrait style projects flat withou
   const saved = await f.j.preferences({ notifications: 'all' });
   assert.equal(saved.revision, revision + 1); assert.equal(saved.preferences.portraitStyle, 'flat');
   assert.equal(JSON.parse(await readFile(f.file, 'utf8')).preferences.portraitStyle, 'flat');
-  assert.deepEqual(saved.awards, old.awards); assert.deepEqual(saved.collection.points, old.collection.points);
+  assert.deepEqual(canonicalCopy(saved.awards), old.awards); assert.deepEqual(saved.collection.points, old.collection.points);
 });
 
 test('an explicitly invalid stored portrait style refuses startup without changing saved bytes', async t => {
@@ -267,9 +268,10 @@ test('themes change presentation without re-granting, resetting conditions, or l
   const before = f.j.snapshot();
   for (const theme of ['xianxia', 'cyber', 'explorer']) {
     const result = await f.j.preferences({ theme });
-    assert.deepEqual(result.awards, before.awards);
+    assert.deepEqual(canonicalCopy(result.awards), canonicalCopy(before.awards));
     assert.deepEqual(result.equipment, before.equipment);
-    assert.deepEqual(result.definitions, before.definitions);
+    assert.deepEqual(canonicalCopy(result.definitions), canonicalCopy(before.definitions));
+    assert.equal(result.awards.find(item => item.definitionId === 'themed').defaultTitle, themes[theme].title);
     assert.deepEqual(result.notifications, []);
   }
   await f.reopen();

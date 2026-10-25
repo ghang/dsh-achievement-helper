@@ -8,6 +8,7 @@ export const FRAME_STYLES = Object.freeze([{ id: 'compact', height: 32 }, { id: 
 export const COLLECTION_LIMITS = Object.freeze({ characters: 256, customCharacters: 128, characterBatch: 20, draws: 1024, artBytes: 256 * 1024, totalArtBytes: 4 * 1024 * 1024, frameHeightMin: 32, frameHeightMax: 160 });
 const LABELS = ['探索', '修仙', '赛博朋克', '武侠', '奇幻', '星际', '海洋', '花园', '学院', '蒸汽朋克'];
 const BASE_RATES = Object.freeze({ N: 0.60, R: 0.28, SR: 0.10, SSR: 0.02 });
+const HARD_PITY_LIMIT = 50;
 const LOW_TEN = 0.88 ** 10;
 const ACTUAL_RATES = Object.freeze({ N: 0.60 - LOW_TEN * (0.60 / 0.88) / 10, R: 0.28 - LOW_TEN * (0.28 / 0.88) / 10, SR: 0.10 + LOW_TEN * (10 / 12) / 10, SSR: 0.02 + LOW_TEN * (2 / 12) / 10 });
 const clone = value => structuredClone(value);
@@ -39,7 +40,7 @@ const NAMES = Object.freeze({
 // canonical records, so loading a prior archive never renames stored cards.
 export const CHARACTER_THEME_NAMES = Object.freeze(Object.fromEntries(Object.entries({
   explorer: ['见习旅人', '初级探险家', '地图学徒', '荒野向导', '资深探险家', '遗迹学者', '远征领队', '传奇探险家'],
-  xianxia: ['练气小修', '练气修士', '练气剑修', '筑基修士', '筑基剑修', '筑基丹师', '结丹真人', '元婴大能'],
+  xianxia: ['练气小修', '筑基修士', '结丹真修', '元婴真人', '化神高人', '炼虚高修', '合体大能', '大乘飞升'],
   cyber: ['街区新人', '见习网行者', '初级技师', '网络佣兵', '资深网行者', '义体专家', '精英黑客', '都市传说'],
   wuxia: ['武馆学徒', '江湖新人', '练武弟子', '入门剑客', '成名侠客', '门派高手', '一代宗师', '武林泰斗'],
   fantasy: ['村庄学徒', '见习冒险者', '初级法师', '王国骑士', '高阶法师', '圣殿骑士', '大魔导师', '传奇英雄'],
@@ -50,16 +51,59 @@ export const CHARACTER_THEME_NAMES = Object.freeze(Object.fromEntries(Object.ent
   steampunk: ['车间学徒', '见习技工', '装配技师', '机械工程师', '高级机匠', '飞艇舰长', '首席工程师', '发明大师'],
 }).map(([theme, names]) => [theme, Object.freeze(names)])));
 const BUILTINS = THEME_IDS.flatMap((theme, themeIndex) => NAMES[theme].map(([name, icon, animation], index) => ({ id: `builtin:${theme}:${index + 1}`, name, description: `来自${LABELS[themeIndex]}旅途的${name}，与你一起收藏真实经历。`, theme, rarity: ['N', 'N', 'N', 'R', 'R', 'R', 'SR', 'SSR'][index], icon, animation, source: 'builtin' })));
-export function presentCollection(collection) {
+export function presentCollection(collection, { theme = THEME_IDS[0], displayNames = {} } = {}) {
   const result = clone(collection);
   for (const character of result.characters) {
-    if (character.source !== 'builtin') continue;
-    const index = BUILTINS.findIndex(item => item.id === character.id);
-    if (index < 0) continue;
-    const name = CHARACTER_THEME_NAMES[character.theme][index % 8];
-    character.name = name; character.description = `${LABELS[THEME_IDS.indexOf(character.theme)]}题材中的${name}，与你一起收藏真实经历。`;
+    if (character.source === 'builtin') {
+      const index = BUILTINS.findIndex(item => item.id === character.id);
+      if (index >= 0) {
+        const name = CHARACTER_THEME_NAMES[character.theme][index % 8];
+        character.name = name; character.description = `${LABELS[THEME_IDS.indexOf(character.theme)]}题材中的${name}，与你一起收藏真实经历。`;
+      }
+    }
+    character.defaultName = character.name;
+    if (has(displayNames, character.id)) { character.customName = displayNames[character.id]; character.name = character.customName; }
   }
+  result.drawInfo = collectionDrawInfo(collection, theme);
   return result;
+}
+
+// Receipts are the only source of pity state. Sorting a copy also keeps older
+// archives readable without inventing a persistent counter or rewriting them.
+function sinceSSR(collection, theme) {
+  let count = 0;
+  const draws = collection.draws.map((draw, index) => ({ draw, index })).filter(({ draw }) => draw.theme === theme).sort((a, b) => a.draw.at - b.draw.at || a.index - b.index);
+  for (const { draw } of draws) for (const result of draw.results) count = result.rarity === 'SSR' ? 0 : count + 1;
+  return count;
+}
+function nextTenRates(streak) {
+  // State is (consecutive non-SSR cards, already drew SR/SSR in this pack).
+  let states = new Map([[`${Math.min(streak, HARD_PITY_LIMIT - 1)}:0`, 1]]);
+  const expected = Object.fromEntries(RARITIES.map(rarity => [rarity, 0]));
+  for (let index = 0; index < 10; index++) {
+    const next = new Map();
+    for (const [key, probability] of states) {
+      const [count, high] = key.split(':').map(Number);
+      const rates = count >= HARD_PITY_LIMIT - 1 ? { SSR: 1 }
+        : index === 9 && !high ? { SR: BASE_RATES.SR + (BASE_RATES.N + BASE_RATES.R) * 10 / 12, SSR: BASE_RATES.SSR + (BASE_RATES.N + BASE_RATES.R) * 2 / 12 }
+          : BASE_RATES;
+      for (const [rarity, rate] of Object.entries(rates)) {
+        const weight = probability * rate, nextKey = `${rarity === 'SSR' ? 0 : count + 1}:${high || rarity === 'SR' || rarity === 'SSR' ? 1 : 0}`;
+        expected[rarity] += weight / 10;
+        next.set(nextKey, (next.get(nextKey) ?? 0) + weight);
+      }
+    }
+    states = next;
+  }
+  return expected;
+}
+export function collectionDrawInfo(collection, theme) {
+  option(theme, THEME_IDS);
+  const count = sinceSSR(collection, theme), tenPullRates = nextTenRates(count), pool = collection.characters.filter(character => character.theme === theme);
+  const sizes = Object.fromEntries(RARITIES.map(rarity => [rarity, pool.filter(character => character.rarity === rarity).length]));
+  return { theme, drawSize: 10, baseRates: clone(BASE_RATES), tenPullRates,
+    characterRates: pool.map(character => ({ id: character.id, baseRate: BASE_RATES[character.rarity] / sizes[character.rarity], tenPullRate: tenPullRates[character.rarity] / sizes[character.rarity] })),
+    pity: { limit: HARD_PITY_LIMIT, sinceSSR: count, remaining: Math.max(1, HARD_PITY_LIMIT - count) }, guarantee: { drawSize: 10, minimumRarity: 'SR' } };
 }
 
 // These titles describe the same sixteen canonical conditions in seven new
@@ -78,7 +122,8 @@ export const ACHIEVEMENT_THEME_TITLES = Object.freeze(Object.fromEntries(Object.
 
 export function collectionCatalog() {
   return clone({ themeIds: THEME_IDS, themes: THEME_IDS.map((id, index) => ({ id, label: LABELS[index] })), rarities: RARITIES, iconIds: ICON_IDS, animationIds: ANIMATION_IDS, animations: ANIMATION_IDS, drawSize: 10, drawCost: 1,
-    baseRates: BASE_RATES, actualRates: ACTUAL_RATES, rates: { base: BASE_RATES, actual: ACTUAL_RATES, actualBasis: 'average_per_card_after_ten_pull_guarantee', characterSelection: 'uniform_within_theme_and_rarity' },
+    baseRates: BASE_RATES, actualRates: ACTUAL_RATES, rates: { base: BASE_RATES, actual: ACTUAL_RATES, actualBasis: 'average_per_card_after_ten_pull_guarantee', actualExcludesHardPity: true, currentRates: 'snapshot.collection.drawInfo: exact average per card across the next ten-pull including the current per-theme SSR streak', characterSelection: 'uniform_within_theme_and_rarity' },
+    hardPity: { limit: HARD_PITY_LIMIT, rarity: 'SSR', unit: 'individual_cards', scope: 'theme', reset: 'every_SSR', source: 'chronological_draw_receipts', legacy: 'Prior streaks may exceed the limit; the next card is SSR without rewriting history.' },
     guarantee: { drawSize: 10, minimumRarity: 'SR', rerollPosition: 10, rerollRates: { SR: 10 / 12, SSR: 2 / 12 }, condition: 'If all ten base rolls are N/R, reroll the tenth rarity as SR/SSR with weights 10:2.' }, themeNaming: { style: 'profession_or_rank', byTheme: CHARACTER_THEME_NAMES, instructions: '优先使用所选题材常见等级或职业，可加职业后缀区分；尊重用户明确指定的名字。' }, frameStyles: FRAME_STYLES, limits: COLLECTION_LIMITS, pointsRule: 'One point per unique permanent award; one point buys exactly ten characters. Duplicates increase ownership count.' });
 }
 export function freshCollection(at, awards = []) {
@@ -133,11 +178,13 @@ export function drawCollection(collection, { requestHash, theme, at, randomInt =
   if (collection.points.balance < 1) fail('NOT_ENOUGH_POINTS', 'One achievement point is required for a ten-pull.', 409);
   if (collection.draws.length >= COLLECTION_LIMITS.draws) fail('BUDGET_EXCEEDED', 'The draw receipt budget is full.', 503);
   const roll = maximum => { let value; try { value = randomInt(maximum); } catch { fail('RANDOM_UNAVAILABLE', 'The secure random source is unavailable.', 503); } if (!Number.isSafeInteger(value) || value < 0 || value >= maximum) fail('RANDOM_UNAVAILABLE', 'The random source did not return an integer in range.', 503); return value; };
-  const results = []; let high = false;
+  const results = []; let high = false, streak = sinceSSR(collection, theme);
   for (let index = 0; index < 10; index++) {
     const rarityRoll = roll(100);
     let rarity = rarityRoll < 60 ? 'N' : rarityRoll < 88 ? 'R' : rarityRoll < 98 ? 'SR' : 'SSR';
-    if (index === 9 && !high && !['SR', 'SSR'].includes(rarity)) rarity = roll(12) < 10 ? 'SR' : 'SSR';
+    if (streak >= HARD_PITY_LIMIT - 1) rarity = 'SSR';
+    else if (index === 9 && !high && !['SR', 'SSR'].includes(rarity)) rarity = roll(12) < 10 ? 'SR' : 'SSR';
+    streak = rarity === 'SSR' ? 0 : streak + 1;
     high ||= ['SR', 'SSR'].includes(rarity);
     const pool = collection.characters.filter(character => character.theme === theme && character.rarity === rarity);
     if (!pool.length) fail('CHARACTER_POOL_UNAVAILABLE', 'The selected rarity pool is unavailable.', 503);

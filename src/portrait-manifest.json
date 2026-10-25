@@ -89,49 +89,49 @@
             },
             {
               "id": "builtin:xianxia:2",
-              "name": "练气修士",
+              "name": "筑基修士",
               "icon": "lotus",
               "column": 1,
               "row": 0
             },
             {
               "id": "builtin:xianxia:3",
-              "name": "练气剑修",
+              "name": "结丹真修",
               "icon": "book",
               "column": 2,
               "row": 0
             },
             {
               "id": "builtin:xianxia:4",
-              "name": "筑基修士",
+              "name": "元婴真人",
               "icon": "sword",
               "column": 3,
               "row": 0
             },
             {
               "id": "builtin:xianxia:5",
-              "name": "筑基剑修",
+              "name": "化神高人",
               "icon": "orb",
               "column": 0,
               "row": 1
             },
             {
               "id": "builtin:xianxia:6",
-              "name": "筑基丹师",
+              "name": "炼虚高修",
               "icon": "fox",
               "column": 1,
               "row": 1
             },
             {
               "id": "builtin:xianxia:7",
-              "name": "结丹真人",
+              "name": "合体大能",
               "icon": "lotus",
               "column": 2,
               "row": 1
             },
             {
               "id": "builtin:xianxia:8",
-              "name": "元婴大能",
+              "name": "大乘飞升",
               "icon": "dragon",
               "column": 3,
               "row": 1
@@ -784,49 +784,49 @@
             },
             {
               "id": "builtin:xianxia:2",
-              "name": "练气修士",
+              "name": "筑基修士",
               "icon": "lotus",
               "column": 1,
               "row": 0
             },
             {
               "id": "builtin:xianxia:3",
-              "name": "练气剑修",
+              "name": "结丹真修",
               "icon": "book",
               "column": 2,
               "row": 0
             },
             {
               "id": "builtin:xianxia:4",
-              "name": "筑基修士",
+              "name": "元婴真人",
               "icon": "sword",
               "column": 3,
               "row": 0
             },
             {
               "id": "builtin:xianxia:5",
-              "name": "筑基剑修",
+              "name": "化神高人",
               "icon": "orb",
               "column": 0,
               "row": 1
             },
             {
               "id": "builtin:xianxia:6",
-              "name": "筑基丹师",
+              "name": "炼虚高修",
               "icon": "fox",
               "column": 1,
               "row": 1
             },
             {
               "id": "builtin:xianxia:7",
-              "name": "结丹真人",
+              "name": "合体大能",
               "icon": "lotus",
               "column": 2,
               "row": 1
             },
             {
               "id": "builtin:xianxia:8",
-              "name": "元婴大能",
+              "name": "大乘飞升",
               "icon": "dragon",
               "column": 3,
               "row": 1

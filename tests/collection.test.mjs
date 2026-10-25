@@ -13,6 +13,7 @@ const pointKinds = ['file_read', 'file_changed', 'skill_loaded', 'file_presented
 const fact = (kind, index = 0) => ({ id: `collection-${kind}-${index}`, kind, at: 1000, sessionId: 'fixture-session', turnKey: 'fixture-turn', ...(kind === 'turn_completed' ? {} : { key: `fixture-${kind}-${index}` }) });
 const character = (changes = {}) => ({ name: '小小看卷狐', description: '记录每一次自然探索的原创小伙伴。', theme: 'xianxia', rarity: 'N', icon: 'fox', animation: 'float', ...changes });
 const code = value => error => error.code === value;
+const canonicalCopy = items => items.map(({ defaultTitle, customName, ...item }) => item);
 async function fixture(t, { randomInt = () => 0 } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'achievement-collection-')), file = join(directory, 'journal.json');
   let now = 1000, current = await createJournal({ file, now: () => now, randomInt });
@@ -243,7 +244,7 @@ test('real rc.3 v1 migration retains awards, requests, unknown progress and equi
   await writeFile(file, bytes); journal = await createJournal({ file, now: () => 5000, randomInt: () => 0 });
   const migrated = journal.snapshot();
   assert.equal(migrated.storage.schemaVersion, 2); assert.equal(migrated.revision, before.revision); assert.equal(migrated.createdAt, before.createdAt); assert.equal(migrated.updatedAt, before.updatedAt);
-  assert.deepEqual(migrated.awards, before.awards); assert.deepEqual(migrated.timeline, [...before.timeline].sort((a, b) => b.at - a.at || b.id.localeCompare(a.id))); assert.deepEqual(migrated.notifications, []);
+  assert.deepEqual(canonicalCopy(migrated.awards), before.awards); assert.deepEqual(canonicalCopy(migrated.timeline), [...before.timeline].sort((a, b) => b.at - a.at || b.id.localeCompare(a.id))); assert.deepEqual(migrated.notifications, []);
   assert.deepEqual(migrated.equipment, { ...before.equipment, character: null }); assert.equal(migrated.preferences.frameHeight, 64); assert.equal(migrated.preferences.frameStyle, 'standard');
   assert.deepEqual(migrated.collection.points, { earned: 2, spent: 0, balance: 2 }); assert.equal(migrated.totals.tokens, null); assert.equal(migrated.totals.knownTokens, 100); assert.equal(migrated.coverage.pendingFacts, 1);
   assert.equal(migrated.definitions.find(item => item.id === 'legacy-kept').themes.xianxia.title, '旧卷留痕');
@@ -252,7 +253,7 @@ test('real rc.3 v1 migration retains awards, requests, unknown progress and equi
   assert.equal(replay.revision, before.revision); assert.deepEqual(replay.notifications, []); assert.equal(replay.collection.points.earned, 2);
   const saved = JSON.parse(await readFile(file, 'utf8')); assert.deepEqual(saved.facts, before.facts); assert.deepEqual(saved.requests, before.requests);
   await journal.preferences({ theme: 'wuxia' }); await journal.draw({ requestId: 'after-migration', theme: 'wuxia' }); await journal.close();
-  journal = await createJournal({ file, now: () => 6000 }); assert.deepEqual(journal.snapshot().awards, before.awards); assert.deepEqual(journal.snapshot().collection.points, { earned: 2, spent: 1, balance: 1 }); assert.deepEqual(journal.snapshot().notifications, []);
+  journal = await createJournal({ file, now: () => 6000 }); assert.deepEqual(canonicalCopy(journal.snapshot().awards), before.awards); assert.deepEqual(journal.snapshot().collection.points, { earned: 2, spent: 1, balance: 1 }); assert.deepEqual(journal.snapshot().notifications, []);
 });
 
 test('invalid legacy bytes fail validation before any migration or reset', async t => {

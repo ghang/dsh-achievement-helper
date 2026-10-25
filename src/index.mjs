@@ -94,7 +94,7 @@ function unavailableJournal() {
     collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [], owned: [], draws: [] },
     storage: { status: 'unavailable', message: '档案加载失败，原数据已保留；请停止其它写入进程或修复存储后重新启用。' } }),
     catalog: () => ({ metrics: [], templates: [], available: false }),
-    ingest: failure, configure: failure, deleteDefinitions: failure, configureCharacters: failure, draw: failure, drawReceipt: () => null, report: failure, preferences: failure, equip: failure, close: async () => {},
+    ingest: failure, configure: failure, deleteDefinitions: failure, rename: failure, configureCharacters: failure, draw: failure, drawReceipt: () => null, report: failure, preferences: failure, equip: failure, close: async () => {},
   };
 }
 
@@ -202,10 +202,18 @@ export async function createAchievementJournal(ctx, config = {}) {
   }
   function state() {
     const snapshot = journal.snapshot();
+    const definitionsById = new Map(snapshot.definitions.map(item => [item.id, item]));
     const diagnostics = collector.diagnostics();
     const auxiliary = generation?.accounting?.() ?? { knownTokens: 0, unknownCalls: 0, observedCalls: 0 };
     const degraded = ingestFailures > 0 || diagnostics.ingestErrors > 0 || diagnostics.boundedDrops > 0 || diagnostics.droppedQueue > 0;
-    return { ...snapshot, debug: { active: false }, notifications: notifications.filter(item => now() - item.seenAt < 300000),
+    return { ...snapshot, debug: { active: false }, notifications: notifications.filter(item => now() - item.seenAt < 300000).map(item => {
+      const definition = definitionsById.get(item.definitionId);
+      if (!definition) return item;
+      // Notices live longer than a rename. Resolve display overrides from the
+      // current definition instead of keeping the name from the earned event.
+      const { customName, defaultTitle, ...notice } = item;
+      return { ...notice, defaultTitle: definition.defaultTitle, ...(definition.customName === undefined ? {} : { customName: definition.customName }) };
+    }),
       generation: { ...(generation?.get?.() ?? { job: null }), accounting: auxiliary },
       coverage: { ...(snapshot.coverage ?? {}), mode: 'live_since_installation', since: snapshot.createdAt,
         historyImport: false, capabilities: capabilities(), diagnostics, ingestFailures, degraded,
@@ -274,7 +282,7 @@ export async function createAchievementJournal(ctx, config = {}) {
       execute: args => { const s = state(); return { revision: s.revision, preferences: s.preferences, totals: s.totals, level: s.level,
         definitions: s.definitions.filter(d => args.id ? d.id === args.id : d.status !== 'archived').slice(0, 64), coverage: s.coverage,
         ...(args.history ? { timeline: (s.timeline ?? []).slice(0, 20), awards: (s.awards ?? []).slice(-20) } : {}),
-        ...(args.collection ? { collection: { points: s.collection.points, owned: s.collection.owned,
+        ...(args.collection ? { collection: { points: s.collection.points, owned: s.collection.owned, drawInfo: s.collection.drawInfo,
           characters: s.collection.characters.slice(0, 128).map(({ art, ...metadata }) => metadata) } } : {}) }; } });
     register({ name: 'achievement_configure', description: 'Configure bounded achievement rules OR themed character pool entries, one kind per write. Query catalog first. Characters are definitions only: this never grants cards, draws, or changes points. New achievement rules count future observed activity. Never fabricate token use or user acceptance.',
       parameters: {
@@ -357,6 +365,10 @@ export async function createAchievementJournal(ctx, config = {}) {
           if (path === API + '/delete') {
             const body = await bodyOf(req);
             return json(res, 200, scope ? debugState(scope, await debug.mutate(scope, 'deleteDefinitions', body)) : await mutate('deleteDefinitions', body));
+          }
+          if (path === API + '/rename') {
+            const body = await bodyOf(req);
+            return json(res, 200, scope ? debugState(scope, await debug.mutate(scope, 'rename', body)) : await mutate('rename', body));
           }
           const method = ({ preferences: 'preferences', equip: 'equip', configure: 'configure', report: 'report' })[path.slice(API.length + 1)];
           if (method) { const body = await bodyOf(req); return json(res, 200, scope ? debugState(scope, await debug.mutate(scope, method, body)) : await mutate(method, body)); }

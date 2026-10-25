@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createJournal, JOURNAL_LIMITS } from './journal.mjs';
 
 export const DEBUG_LIMITS = Object.freeze({ sessions: 4, ttlMs: 30 * 60 * 1000 });
-const METHODS = Object.freeze({ preferences: 'preferences', equip: 'equip', configure: 'configure', report: 'report', draw: 'draw', configureCharacters: 'configureCharacters', characters: 'configureCharacters', deleteDefinitions: 'deleteDefinitions' });
+const METHODS = Object.freeze({ preferences: 'preferences', equip: 'equip', configure: 'configure', report: 'report', draw: 'draw', configureCharacters: 'configureCharacters', characters: 'configureCharacters', deleteDefinitions: 'deleteDefinitions', rename: 'rename' });
 const clone = value => structuredClone(value);
 function failure(message, code, status = 409) { return Object.assign(new Error(message), { name: 'JournalError', code, status }); }
 const expired = () => failure('调试会话已失效，请重新进入调试；未切换到真实档案。', 'DEBUG_SCOPE_EXPIRED');

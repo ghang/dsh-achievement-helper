@@ -178,6 +178,7 @@ window.__ModuleLoader__.load({
       return exact(value);
     }
     function trimNumber(value) { return value.toFixed(value >= 100 ? 0 : 1).replace(/\.0$/, ''); }
+    function percentage(value) { return finite(value) && value >= 0 && value <= 1 ? Number((value * 100).toFixed(2)) + '%' : '—'; }
     function date(value, full) {
       const parsed = new Date(value);
       if (!value || !Number.isFinite(parsed.getTime())) return '日期未记录';
@@ -192,7 +193,7 @@ window.__ModuleLoader__.load({
       if (concealed(item, data)) return { title: '尚未揭晓', description: '某个平常的瞬间，会留下一枚意外的印记。' };
       const local = item && item.themes && item.themes[themeId(data)];
       return {
-        title: local && local.title || item && item.title || '未命名成就',
+        title: item && item.customName || local && local.title || item && (item.defaultTitle || item.title) || '未命名成就',
         description: local && local.description || item && item.description || '',
       };
     }
@@ -593,7 +594,7 @@ window.__ModuleLoader__.load({
         if (active && epoch === generation) publish({ generationError: error.message || '取消失败，请重试同步。' });
       } finally { if (active && epoch === generation) publish({ generationBusy: false }); }
     }
-    async function mutate(path, body) {
+    async function mutate(path, body, onError) {
       if (!active || actionCount) return false;
       const epoch = generation;
       actionCount += 1; publish({ busy: true, actionError: null });
@@ -602,7 +603,10 @@ window.__ModuleLoader__.load({
         if (generation === epoch) accept(data);
         return true;
       } catch (error) {
-        if (active && generation === epoch) publish({ actionError: error.message || '保存失败，请重试。' });
+        if (active && generation === epoch) {
+          if (onError) onError(error);
+          publish({ actionError: error.message || '保存失败，请重试。' });
+        }
         return false;
       } finally {
         if (generation === epoch) { actionCount -= 1; publish({ busy: false }); }
@@ -822,9 +826,59 @@ window.__ModuleLoader__.load({
         h('strong', null, state.debugExpired ? '调试已失效' : state.debugTransition ? '正在切换模式…' : '调试模式'), h('span', null, state.debugExpired ? '未切回真实数据' : '当前为独立临时数据'),
         h('button', { type: 'button', disabled: state.debugTransition, onClick: showDebugPanel }, '打开面板'), h('button', { type: 'button', disabled: state.debugTransition, onClick: function () { void switchDebug('exit'); } }, '退出调试'));
     }
+    function NameEditor(props) {
+      const item = props.item, data = props.data;
+      function displayed(value) { return props.kind === 'character' ? value && value.name || '未命名角色' : presentation(value, data).title; }
+      function contextFor(value) { return generation + ':' + (debugToken || 'real') + ':' + themeId(value) + ':' + props.kind + ':' + item.id; }
+      function currentItem() { return props.kind === 'character' ? characterFor(snapshot.data, item.id) : definitionFor(snapshot.data, item.id); }
+      const context = contextFor(data), name = displayed(item), inputId = 'daj-rename-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
+      const [open, setOpen] = useState(false), [draft, setDraft] = useState(name), [pending, setPending] = useState(false);
+      const submission = useRef(null), currentContext = useRef(context), live = useRef(true), edited = useRef(false);
+      currentContext.current = context;
+      useEffect(function () { setOpen(false); setDraft(name); setPending(false); submission.current = null; edited.current = false; }, [context]);
+      useEffect(function () { if (!edited.current && !pending) setDraft(name); }, [name, pending]);
+      useEffect(function () { live.current = true; return function () { live.current = false; }; }, []);
+      function stillCurrent() {
+        const latest = currentItem();
+        return active && live.current && !modeSwitching && snapshot.data && currentContext.current === context && contextFor(snapshot.data) === context && latest && latest.status !== 'archived';
+      }
+      async function save(value, event) {
+        if (event && event.preventDefault) event.preventDefault();
+        if (props.busy || snapshot.busy || !stillCurrent()) return;
+        const nextName = value === null ? null : draft.trim();
+        if (!submission.current && nextName !== null && (!nextName || nextName.length > 60 || /[\u0000-\u001f\u007f]/.test(nextName))) return;
+        if (!submission.current) submission.current = { requestId: requestId(), expectedRevision: snapshot.data.revision, kind: props.kind, id: item.id, name: nextName };
+        const body = submission.current;
+        let code;
+        const ok = await mutate('/rename', body, function (error) { code = error.code; });
+        if (!stillCurrent() || submission.current !== body) return;
+        if (ok) {
+          submission.current = null; edited.current = false; setPending(false); setOpen(false); setDraft(displayed(currentItem()));
+          showNotice(body.name === null ? '已恢复原名。' : '名字已保存。');
+        } else {
+          const refused = ['INVALID_INPUT', 'PRIVATE_PATH', 'WORKSPACE_MISMATCH', 'NOT_FOUND', 'REVISION_CONFLICT', 'REQUEST_ID_REUSED', 'PERSISTENCE_FAILED', 'BUDGET_EXCEEDED', 'COUNTER_OVERFLOW', 'DEBUG_SCOPE_EXPIRED', 'DEFINITION_ARCHIVED', 'ARCHIVED_ID'].includes(code);
+          if (refused) { submission.current = null; setPending(false); }
+          else setPending(true);
+          if (code === 'REVISION_CONFLICT') {
+            const previous = flight; if (previous) await previous;
+            if (stillCurrent()) await refresh();
+          }
+        }
+      }
+      const invalid = !draft.trim() || draft.trim().length > 60 || /[\u0000-\u001f\u007f]/.test(draft);
+      return h('div', { className: 'daj-name-editor' + (open ? ' daj-name-editor-open' : ''), 'data-name-kind': props.kind, 'data-name-id': item.id },
+        h(Button, { className: 'daj-text-button', disabled: props.busy || pending, 'aria-label': (open ? '收起改名 ' : '改名 ') + name, 'aria-expanded': open, 'aria-controls': inputId + '-form', onClick: function () { setOpen(!open); } }, open ? '收起改名' : '改名'),
+        open ? h('form', { id: inputId + '-form', onSubmit: function (event) { void save(undefined, event); } },
+          h('label', { htmlFor: inputId }, h('span', { className: 'daj-field-label' }, '新名字'), h('input', { id: inputId, className: 'daj-direction-input', 'aria-label': '新名字 ' + name, value: draft, maxLength: 60, required: true, disabled: props.busy || pending, onChange: function (event) { setDraft(event.target.value); edited.current = true; submission.current = null; } })),
+          h('p', { className: 'daj-hint' }, '名字跨主题通用，只影响显示。'),
+          pending ? h('p', { className: 'daj-name-pending', role: 'status' }, '保存结果尚未确认，请沿用原请求重试。') : null,
+          h('div', { className: 'daj-name-actions' },
+            h(Button, { className: 'daj-primary', disabled: props.busy || !pending && (invalid || draft.trim() === name), 'aria-label': (pending ? '重试这次改名 ' : '保存名字 ') + name, onClick: function () { void save(); } }, pending ? '重试这次改名' : '保存名字'),
+            item.customName ? h(Button, { disabled: props.busy || pending, 'aria-label': '恢复原名 ' + name, onClick: function () { void save(null); } }, '恢复原名') : null)) : null);
+    }
     function CharacterEditor(props) {
       const item = props.item;
-      const [form, setForm] = useState(function () { return item ? { name: item.name, description: item.description || '', rarity: item.rarity, icon: item.icon, animation: item.animation, art: item.art } : { name: '', description: '', rarity: 'R', icon: 'fox', animation: 'float', art: undefined }; });
+      const [form, setForm] = useState(function () { return item ? { name: item.defaultName || item.name, description: item.description || '', rarity: item.rarity, icon: item.icon, animation: item.animation, art: item.art } : { name: '', description: '', rarity: 'R', icon: 'fox', animation: 'float', art: undefined }; });
       const [uploading, setUploading] = useState(false);
       const [error, setError] = useState(null);
       const reader = useRef(null), live = useRef(true), submission = useRef(null);
@@ -905,6 +959,10 @@ window.__ModuleLoader__.load({
       const [filter, setFilter] = useState('owned'), [editing, setEditing] = useState(null);
       const collection = data.collection || {}, points = collection.points || {};
       const info = state.catalog && state.catalog.collection || {};
+      const drawInfo = collection.drawInfo && collection.drawInfo.theme === themeId(data) ? collection.drawInfo : null;
+      const pity = drawInfo && drawInfo.pity;
+      const hasPity = pity && finite(pity.limit) && pity.limit > 0 && finite(pity.sinceSSR) && pity.sinceSSR >= 0 && finite(pity.remaining) && pity.remaining >= 1;
+      const pityText = hasPity ? 'SSR 保底：已累计 ' + exact(pity.sinceSSR) + ' 抽 / 最多再 ' + exact(pity.remaining) + ' 抽' : '';
       const cost = finite(info.drawCost) ? info.drawCost : 1;
       const receipt = state.drawReceipt && state.drawReceipt.theme === themeId(data) ? state.drawReceipt : array(collection.draws).filter(function (draw) { return draw.theme === themeId(data); }).slice().sort(function (a, b) { return new Date(b.at) - new Date(a.at); })[0];
       const visible = pool.filter(function (item) { return filter === 'pool' || Boolean(ownedCharacter(data, item.id)); });
@@ -923,11 +981,19 @@ window.__ModuleLoader__.load({
           }))) : null,
         mode === 'create' ? h('div', { className: 'daj-character-studio' }, h(CharacterGenerator, { data: data, state: state, view: view }), h(CharacterEditor, { key: editing && editing.id || 'new', item: editing, data: data, catalog: state.catalog, busy: state.busy, clear: function () { setEditing(null); } })) : h(React.Fragment, null,
           h('div', { className: 'daj-filters' }, [['owned', '已获得'], ['pool', '全部卡池']].map(function (choice) { return h(Button, { key: choice[0], className: 'daj-chip' + (filter === choice[0] ? ' daj-selected' : ''), 'aria-pressed': filter === choice[0], onClick: function () { setFilter(choice[0]); } }, choice[1]); })),
+          drawInfo ? h('div', { className: 'daj-pool-info' },
+            h('p', { className: 'daj-pool-guarantee' }, '十连至少 1 位 SR 或以上。', hasPity ? ' 每 ' + exact(pity.limit) + ' 抽内必出 SSR，获得后重新累计。' : ''),
+            hasPity ? h('div', { className: 'daj-pity' }, h('p', null, pityText, pity.remaining === 1 ? h('strong', null, ' · 下 1 抽必出 SSR') : null),
+              h('div', { className: 'daj-progress', role: 'progressbar', 'aria-label': 'SSR 保底进度', 'aria-valuemin': 0, 'aria-valuemax': pity.limit, 'aria-valuenow': Math.min(pity.limit, pity.sinceSSR), 'aria-valuetext': pityText }, h('i', { style: { width: Math.min(100, pity.sinceSSR / pity.limit * 100) + '%' } }))) : null,
+            array(drawInfo.characterRates).length ? h('p', { className: 'daj-rate-explanation' }, '基础单抽为未触发保底的单张概率；下次十连均率为含当前保底的十个位置平均单张概率。') : null) : null,
           visible.length ? h('div', { className: 'daj-character-grid' }, visible.map(function (item) {
             const own = ownedCharacter(data, item.id), worn = data.equipment && data.equipment.character === item.id;
+            const rates = drawInfo && array(drawInfo.characterRates).find(function (entry) { return entry.id === item.id; });
             return h('article', { key: item.id, className: 'daj-card daj-character-card daj-rarity-' + item.rarity + (worn ? ' daj-character-worn' : '') }, h('div', { className: 'daj-character-topline' }, h('span', { className: 'daj-rarity' }, item.rarity), h('small', null, THEMES[item.theme] && THEMES[item.theme].name)),
               h(CharacterArt, { character: item, data: data, reduce: reducedMotion(data), size: 110 }), h('h3', null, item.name), h('p', null, item.description), h('small', { className: 'daj-character-count' }, own ? '已收藏 ' + exact(own.count) + ' 份' : '尚未获得 · 已在卡池'),
+              rates ? h('dl', { className: 'daj-character-rates', 'aria-label': item.name + '抽取概率' }, h('div', null, h('dt', null, '基础单抽'), h('dd', null, percentage(rates.baseRate))), h('div', null, h('dt', null, '下次十连均率'), h('dd', null, percentage(rates.tenPullRate)))) : null,
               h(Button, { className: worn ? '' : 'daj-primary', disabled: state.busy || !own, 'aria-label': (worn ? '取下角色 ' : '佩戴角色 ') + item.name, onClick: function () { void mutate('/equip', { id: item.id, slot: 'character', equipped: !worn }); } }, worn ? '正在陪伴 · 取下' : own ? '佩戴到成就框' : '抽取后可佩戴'),
+              h(NameEditor, { kind: 'character', item: item, data: data, busy: state.busy }),
               item.source !== 'builtin' ? h(Button, { className: 'daj-text-button', 'aria-label': '编辑角色 ' + item.name, onClick: function () { setEditing(item); setMode('create'); } }, '编辑外观') : null);
           })) : h('section', { className: 'daj-card' }, h(Empty, { title: filter === 'owned' ? '还没有遇见第一位同伴' : '这个主题的卡池还很安静', icon: 'star', action: h(Button, { onClick: function () { setFilter('pool'); } }, '看看全部卡池') }, filter === 'owned' ? '解锁成就积累点数，再来抽取喜欢的主题。' : '可以让模型或自己创作新角色。'))));
     }
@@ -1020,7 +1086,7 @@ window.__ModuleLoader__.load({
       return h('aside', { className: 'daj-card daj-detail', 'aria-label': name.title + '详情' },
         h('div', { className: 'daj-detail-art' }, h(Badge, { item: award || item, theme: themeId(data), size: 112, locked: !owned })),
         h('div', { className: 'daj-eyebrow' }, owned ? 'COLLECTED MOMENT' : 'A MOMENT AHEAD'),
-        h('h3', null, name.title), h('p', { className: 'daj-description' }, name.description),
+        h('h3', null, name.title), concealed(item, data) ? null : h(NameEditor, { kind: 'achievement', item: item, data: data, busy: props.busy }), h('p', { className: 'daj-description' }, name.description),
         !owned && !modelReport(item) && !concealed(item, data) ? h(Progress, { value: item.progress, target: item.target, label: name.title }) : null,
         h('dl', { className: 'daj-details-list' },
           h('div', null, h('dt', null, '配置来源'), h('dd', null, definitionLabel(item))),
@@ -1149,7 +1215,7 @@ window.__ModuleLoader__.load({
                 h(DeleteDefinitionButton, { item: item, data: data, busy: state.busy })); })
               : h('section', { className: 'daj-card daj-model-empty' }, h(Empty, { title: '你的第一份配置，还没到来', icon: 'spark' }, '选择数据和风格，点击生成。实际保存的成就会出现在这里。')),
             h('label', { className: 'daj-summary-toggle' }, h('input', { type: 'checkbox', checked: showSummary, onChange: function (event) { setShowSummary(event.target.checked); } }), '显示当前配置摘要'),
-            showSummary ? h('pre', { className: 'daj-config-summary' }, JSON.stringify(models.map(function (item) { return { id: item.id, title: item.title, status: item.status, rule: item.rule, scope: item.scope }; }), null, 2)) : null)));
+            showSummary ? h('pre', { className: 'daj-config-summary' }, JSON.stringify(models.map(function (item) { return { id: item.id, title: presentation(item, data).title, status: item.status, rule: item.rule, scope: item.scope }; }), null, 2)) : null)));
     }
     function GenerationStatus(props) {
       const state = props.state, job = state.generationJob;
@@ -1188,7 +1254,7 @@ window.__ModuleLoader__.load({
             const deleted = definitionFor(data, entry.definitionId) && definitionFor(data, entry.definitionId).status === 'archived';
             return h('li', { key: entry.id, className: 'daj-history-entry' }, h('time', { dateTime: entry.at }, date(entry.at, true)),
               h('div', { className: 'daj-card daj-history-card' }, entry.kind === 'unlock' ? h(Badge, { item: item || entry, theme: themeId(data), size: 50 }) : h('span', { className: 'daj-history-level' }, h(Icon, { name: 'star', size: 24 })),
-                h('div', { className: 'daj-grow' }, h('h3', null, item ? presentation(item, data).title : entry.title || '新的成长阶段'), h('p', null, entry.kind === 'unlock' ? '获得一枚成就 · ' + sourceLabel(entry) : '等级提升 · ' + (finite(entry.level) ? exact(entry.level) + ' 阶' : '新的积累'))),
+                h('div', { className: 'daj-grow' }, h('h3', null, item ? presentation(item, data).title : entry.kind === 'unlock' ? presentation(entry, data).title : entry.title || '新的成长阶段'), h('p', null, entry.kind === 'unlock' ? '获得一枚成就 · ' + sourceLabel(entry) : '等级提升 · ' + (finite(entry.level) ? exact(entry.level) + ' 阶' : '新的积累'))),
                 item && entry.definitionId && !deleted ? h(Button, { className: 'daj-icon-button', 'aria-label': '查看成就详情', onClick: function () { props.select(entry.definitionId); } }, h(Icon, { name: 'chevron', size: 16 })) : deleted ? h(Pill, null, '已获记录保留') : null),
               deleted && item && item.description ? h('p', { className: 'daj-history-preserved' }, presentation(item, data).description) : null);
           })) : h('section', { className: 'daj-card' }, h(Empty, { title: '还没有这一类记录', icon: 'history' }, '第一枚成就或新的成长阶段到来后，会在这里留下日期。')),
@@ -1291,8 +1357,9 @@ window.__ModuleLoader__.load({
       const state = props.state, feedback = state.toast;
       if (!feedback) return null;
       const data = state.data, t = theme(data);
-      const item = allAwards(data).find(function (award) { return award.id === feedback.leader.awardId; }) || definitionFor(data, feedback.leader.definitionId);
-      const title = feedback.demo ? feedback.leader.title : item ? presentation(item, data).title : feedback.leader.title || (feedback.kind === 'progress' ? t.progress : t.level);
+      const leader = array(data && data.notifications).find(function (entry) { return entry.id === feedback.leader.id; }) || feedback.leader;
+      const item = allAwards(data).find(function (award) { return award.id === leader.awardId; }) || definitionFor(data, leader.definitionId);
+      const title = feedback.demo ? feedback.leader.title : item ? presentation(item, data).title : leader.customName || leader.title ? presentation(leader, data).title : feedback.kind === 'progress' ? t.progress : t.level;
       const unlocks = feedback.items.filter(function (entry) { return entry.kind === 'unlock'; }).length;
       const progress = feedback.items.filter(function (entry) { return entry.kind === 'progress'; });
       const tokens = progress.reduce(function (sum, entry) { return sum + (finite(entry.tokens) ? entry.tokens : 0); }, 0);

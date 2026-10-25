@@ -10,6 +10,7 @@ import { CHARACTER_THEME_NAMES, THEME_IDS } from '../src/collection.mjs';
 import { createDebugController } from '../src/debug.mjs';
 
 const code = expected => error => error.code === expected;
+const canonicalCopy = items => items.map(({ defaultTitle, customName, ...item }) => item);
 const definition = (id, rule = { template: 'model_report' }, extra = {}) => ({ id, title: `自定目标 ${id}`, rule, ...extra });
 const fact = (id, kind = 'file_read', extra = {}) => ({ id, kind, at: 1000, sessionId: 'fixture-session', turnKey: 'fixture-turn', key: 'opaque-file', ...extra });
 async function fixture(t) {
@@ -121,7 +122,7 @@ test('debug deletion remains isolated and debug quick draws follow their own glo
 
 test('role presentation maps all builtin slots while custom names and stored canonical bytes remain intact', async t => {
   const f = await fixture(t);
-  assert.deepEqual(CHARACTER_THEME_NAMES.xianxia, ['练气小修', '练气修士', '练气剑修', '筑基修士', '筑基剑修', '筑基丹师', '结丹真人', '元婴大能']);
+  assert.deepEqual(CHARACTER_THEME_NAMES.xianxia, ['练气小修', '筑基修士', '结丹真修', '元婴真人', '化神高人', '炼虚高修', '合体大能', '大乘飞升']);
   assert.equal(CHARACTER_THEME_NAMES.wuxia[1], '江湖新人'); assert.equal(CHARACTER_THEME_NAMES.steampunk[7], '发明大师');
   for (const theme of THEME_IDS) {
     const cards = f.j.snapshot().collection.characters.filter(item => item.theme === theme);
@@ -152,7 +153,7 @@ test('the real prior rc.2 schema-2 shape loads byte-for-byte while builtin prese
   assert.equal(createHash('sha256').update(bytes).digest('hex'), LEGACY_V2_SHA); await writeFile(file, bytes);
   journal = await createJournal({ file, randomInt: () => assert.fail('reopening/replaying cannot roll again') });
   const snapshot = journal.snapshot(); assert.equal(snapshot.storage.schemaVersion, 2);
-  assert.deepEqual(snapshot.collection.owned, raw.collection.owned); assert.deepEqual(snapshot.collection.draws, raw.collection.draws); assert.deepEqual(snapshot.collection.points, raw.collection.points); assert.deepEqual(snapshot.awards, raw.awards); assert.deepEqual(snapshot.equipment, raw.equipment);
+  assert.deepEqual(snapshot.collection.owned, raw.collection.owned); assert.deepEqual(snapshot.collection.draws, raw.collection.draws); assert.deepEqual(snapshot.collection.points, raw.collection.points); assert.deepEqual(canonicalCopy(snapshot.awards), raw.awards); assert.deepEqual(snapshot.equipment, raw.equipment);
   assert.equal(snapshot.collection.characters.find(item => item.id === 'builtin:xianxia:1').name, '练气小修');
   assert.equal(raw.collection.characters.find(item => item.id === 'builtin:xianxia:1').name, '青苔童子');
   assert.equal(snapshot.collection.characters.find(item => item.id === 'legacy-custom').name, '自定旧名字');

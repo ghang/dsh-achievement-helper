@@ -35,6 +35,12 @@ function text(value, name, maximum, fallback) {
   if (/(?:^|\s)(?:\/(?:Users|home|private|tmp|var|etc|Volumes|opt)\/|file:\/\/|[A-Za-z]:\\|~\/)/u.test(value)) fail('PRIVATE_PATH', `${name} cannot contain an absolute filesystem path.`);
   return value.trim();
 }
+function displayName(value) {
+  const result = text(value, 'display name', 60);
+  if (/\p{Cc}/u.test(value)) fail('INVALID_INPUT', 'A display name cannot contain control characters.');
+  if (/(?:\/(?:Users|home|private|tmp|var|etc|Volumes|opt)\/|file:\/\/|[A-Za-z]:\\|~\/)/u.test(value)) fail('PRIVATE_PATH', 'A display name cannot contain a private filesystem path.');
+  return result;
+}
 function opaque(value, name) { if (typeof value !== 'string' || value.length < 1 || value.length > 256 || !/^[A-Za-z0-9][A-Za-z0-9_.:@+\-]*$/u.test(value)) fail('INVALID_INPUT', `${name} must be an opaque identifier, not a path or body.`); return value; }
 function option(value, allowed, name) { if (!allowed.includes(value)) fail('INVALID_INPUT', `${name} is unsupported.`); return value; }
 function bool(value, name) { if (typeof value !== 'boolean') fail('INVALID_INPUT', `${name} must be a boolean.`); return value; }
@@ -136,7 +142,7 @@ function validateStored(state) {
     object(state, 'stored state');
     if (![1, VERSION].includes(state.schemaVersion)) fail('SCHEMA_UNSUPPORTED', 'The saved journal schema is unsupported.');
     const legacy = state.schemaVersion === 1, themeIds = legacy ? LEGACY_THEMES : THEMES, iconIds = legacy ? LEGACY_ICONS : ICONS;
-    fields(state, ['schemaVersion', 'revision', 'createdAt', 'updatedAt', 'preferences', 'counts', 'sets', 'facts', 'pending', 'requests', 'definitions', 'awards', 'timeline', 'equipment', 'usage', 'usageMissing', 'firstFactAt', 'lastFactAt', ...legacy ? [] : ['collection'], ...state.debug === true ? ['debug'] : []], 'stored state');
+    fields(state, ['schemaVersion', 'revision', 'createdAt', 'updatedAt', 'preferences', 'counts', 'sets', 'facts', 'pending', 'requests', 'definitions', 'awards', 'timeline', 'equipment', 'usage', 'usageMissing', 'firstFactAt', 'lastFactAt', ...legacy ? [] : ['collection', 'displayNames'], ...state.debug === true ? ['debug'] : []], 'stored state');
     integer(state.revision, 'revision'); integer(state.createdAt, 'createdAt'); integer(state.updatedAt, 'updatedAt');
     fields(state.preferences, ['theme', 'notifications', 'reducedMotion', ...legacy ? [] : ['frameStyle', 'frameHeight', 'portraitStyle']], 'preferences');
     option(state.preferences.theme, themeIds, 'theme'); option(state.preferences.notifications, ['all', 'unlocks', 'off'], 'notifications'); option(state.preferences.reducedMotion, ['system', 'reduce', 'full'], 'reducedMotion');
@@ -147,7 +153,7 @@ function validateStored(state) {
     assertHashMap(state.facts, 'fact identities', value => { if (typeof value !== 'string' || !HASH.test(value)) fail('CORRUPT_STATE', 'Invalid fact fingerprint.'); });
     assertHashMap(state.pending, 'pending identities', value => { fields(value, ['kind', 'at', 'workspaceKey'], 'pending fact'); option(value.kind, KINDS, 'pending metric'); integer(value.at, 'pending time'); if (value.workspaceKey !== undefined) opaque(value.workspaceKey, 'workspace key'); });
     for (const id of Object.keys(state.pending)) if (has(state.facts, id)) fail('CORRUPT_STATE', 'An identity is both settled and pending.');
-    assertHashMap(state.requests, 'request identities', value => { fields(value, ['method', 'fingerprint'], 'request'); option(value.method, ['configure', 'report', ...legacy ? [] : ['draw', 'configureCharacters'], ...state.debug === true ? ['debugAction'] : []], 'request method'); if (!HASH.test(value.fingerprint)) fail('CORRUPT_STATE', 'Invalid request fingerprint.'); });
+    assertHashMap(state.requests, 'request identities', value => { fields(value, ['method', 'fingerprint'], 'request'); option(value.method, ['configure', 'report', ...legacy ? [] : ['draw', 'configureCharacters', 'rename'], ...state.debug === true ? ['debugAction'] : []], 'request method'); if (!HASH.test(value.fingerprint)) fail('CORRUPT_STATE', 'Invalid request fingerprint.'); });
     if (!Array.isArray(state.definitions) || !Array.isArray(state.awards) || !Array.isArray(state.timeline)) fail('CORRUPT_STATE', 'Collections must be arrays.');
     const ids = new Set();
     for (const d of state.definitions) {
@@ -189,7 +195,19 @@ function validateStored(state) {
     fields(state.equipment, ['badges', 'charm', ...legacy ? [] : ['character']], 'equipment');
     if (!Array.isArray(state.equipment.badges) || state.equipment.badges.length > 3 || new Set(state.equipment.badges).size !== state.equipment.badges.length || state.equipment.badges.some(id => !awarded.has(id))) fail('CORRUPT_STATE', 'Invalid equipped badge.');
     if (state.equipment.charm !== null && !['compass', 'star', 'leaf'].includes(state.equipment.charm) && !awarded.has(state.equipment.charm)) fail('CORRUPT_STATE', 'Invalid charm.');
-    if (!legacy) validateCollection(state.collection, { awards: state.awards, requests: state.requests, character: state.equipment.character });
+    if (!legacy) {
+      validateCollection(state.collection, { awards: state.awards, requests: state.requests, character: state.equipment.character });
+      if (has(state, 'displayNames')) {
+        fields(state.displayNames, ['achievements', 'characters'], 'display names');
+        for (const kind of ['achievements', 'characters']) {
+          const records = kind === 'achievements' ? state.definitions : state.collection.characters;
+          for (const [id, name] of Object.entries(object(state.displayNames[kind], `display names ${kind}`))) {
+            opaque(id, 'display name identity'); displayName(name);
+            if (!records.some(record => record.id === id)) fail('CORRUPT_STATE', 'A display name has no existing identity.');
+          }
+        }
+      }
+    }
     for (const bucket of ['usage', 'usageMissing']) for (const [key, value] of Object.entries(object(state[bucket], bucket))) { option(key, USAGE_FIELDS, 'usage field'); integer(value, 'usage count'); }
     for (const key of ['firstFactAt', 'lastFactAt']) if (state[key] !== null) integer(state[key], key);
     assertBudget(state);
@@ -264,8 +282,13 @@ function publicSnapshot(state, notifications, storageStatus) {
   const knownTokens = state.counts.tokens ?? 0;
   const totals = { tokens: count('tokens'), knownTokens, turns: count('turn_completed'), fileReads: count('file_read'), fileChanges: count('file_changed'), formats: distinct('format_read'), skills: distinct('skill_loaded'), delegations: count('delegate_completed'), presentations: count('file_presented'), routes: distinct('route_used'), recalls: count('recall_used'), byMetric: Object.fromEntries(KINDS.map(kind => [kind, count(kind)])) };
   totals.usage = Object.fromEntries(USAGE_FIELDS.map(key => [key, key === 'totalTokens' ? totals.tokens : state.usageMissing[key] ? null : state.usage[key] ?? (knownTokens === 0 && !pendingByMetric.tokens ? 0 : null)]));
-  const definitions = state.definitions.map(d => ({ id: d.id, title: d.title, description: d.description, icon: d.icon, category: d.category, source: d.source, configuredBy: d.configuredBy, rule: clone(d.rule), scope: d.scope, ...(d.workspaceKey ? { workspaceKey: d.workspaceKey } : {}), baseline: d.baseline, baselineAt: d.baselineAt, hidden: d.hidden, revision: d.revision, status: d.status, progress: (d.frozenIncomplete || Object.keys(d.unknown).length) && d.value < d.rule.target ? null : d.value, knownProgress: d.value, target: d.rule.target, progressRatio: Math.min(1, d.value / d.rule.target), incomplete: d.frozenIncomplete || Object.keys(d.unknown).length > 0, ...(d.unlockedAt !== undefined ? { unlockedAt: d.unlockedAt } : {}), themes: clone(d.themes) }));
-  return clone({ ...state.debug === true ? { debug: true } : {}, revision: state.revision, createdAt: state.createdAt, updatedAt: state.updatedAt, preferences: { portraitStyle: 'flat', ...state.preferences }, totals, level: levelFor(knownTokens, !!pendingByMetric.tokens), definitions, awards: state.awards, timeline: [...state.timeline].sort((a, b) => b.at - a.at || b.id.localeCompare(a.id)), notifications, equipment: state.equipment, collection: presentCollection(state.collection), coverage: { mode: 'observed_facts', startedAt: state.createdAt, firstFactAt: state.firstFactAt, lastFactAt: state.lastFactAt, pendingFacts: Object.keys(state.pending).length, pendingByMetric, complete: Object.keys(state.pending).length === 0, historyComplete: false, scope: 'collector_supplied', note: 'Coverage includes only facts actually supplied by the collector; account-wide history is not implied.' }, storage: { schemaVersion: VERSION, status: storageStatus, atomic: true, writer: 'exclusive_lock_single_process', limits: JOURNAL_LIMITS, usage: { facts: Object.keys(state.facts).length, pendingFacts: Object.keys(state.pending).length, requests: Object.keys(state.requests).length, definitions: state.definitions.length, awards: state.awards.length, characters: state.collection.characters.length, draws: state.collection.draws.length } } });
+  const displayNames = state.displayNames?.achievements ?? {}, byAward = new Map(state.awards.map(item => [item.id, item])), byDefinition = new Map(state.definitions.map(item => [item.id, item]));
+  const named = (item, definitionId, themes = item.themes) => ({ ...item, defaultTitle: themes?.[state.preferences.theme]?.title ?? item.title, ...definitionId !== undefined && has(displayNames, definitionId) ? { customName: displayNames[definitionId] } : {} });
+  const definitions = state.definitions.map(d => named({ id: d.id, title: d.title, description: d.description, icon: d.icon, category: d.category, source: d.source, configuredBy: d.configuredBy, rule: clone(d.rule), scope: d.scope, ...(d.workspaceKey ? { workspaceKey: d.workspaceKey } : {}), baseline: d.baseline, baselineAt: d.baselineAt, hidden: d.hidden, revision: d.revision, status: d.status, progress: (d.frozenIncomplete || Object.keys(d.unknown).length) && d.value < d.rule.target ? null : d.value, knownProgress: d.value, target: d.rule.target, progressRatio: Math.min(1, d.value / d.rule.target), incomplete: d.frozenIncomplete || Object.keys(d.unknown).length > 0, ...(d.unlockedAt !== undefined ? { unlockedAt: d.unlockedAt } : {}), themes: clone(d.themes) }, d.id));
+  const awards = state.awards.map(item => named(item, item.definitionId));
+  const historyCopy = item => named(item, item.definitionId, (byAward.get(item.awardId) ?? byDefinition.get(item.definitionId))?.themes);
+  const timeline = [...state.timeline].sort((a, b) => b.at - a.at || b.id.localeCompare(a.id)).map(historyCopy);
+  return clone({ ...state.debug === true ? { debug: true } : {}, revision: state.revision, createdAt: state.createdAt, updatedAt: state.updatedAt, preferences: { portraitStyle: 'flat', ...state.preferences }, totals, level: levelFor(knownTokens, !!pendingByMetric.tokens), definitions, awards, timeline, notifications: notifications.map(historyCopy), equipment: state.equipment, collection: presentCollection(state.collection, { theme: state.preferences.theme, displayNames: state.displayNames?.characters }), coverage: { mode: 'observed_facts', startedAt: state.createdAt, firstFactAt: state.firstFactAt, lastFactAt: state.lastFactAt, pendingFacts: Object.keys(state.pending).length, pendingByMetric, complete: Object.keys(state.pending).length === 0, historyComplete: false, scope: 'collector_supplied', note: 'Coverage includes only facts actually supplied by the collector; account-wide history is not implied.' }, storage: { schemaVersion: VERSION, status: storageStatus, atomic: true, writer: 'exclusive_lock_single_process', limits: JOURNAL_LIMITS, usage: { facts: Object.keys(state.facts).length, pendingFacts: Object.keys(state.pending).length, requests: Object.keys(state.requests).length, definitions: state.definitions.length, awards: state.awards.length, characters: state.collection.characters.length, draws: state.collection.draws.length } } });
 }
 async function atomicWrite(file, data) {
   const serialized = JSON.stringify(data);
@@ -390,6 +413,31 @@ export async function createJournal({ file, now = Date.now, randomInt, allowDebu
       return mutate((next, at) => {
         if (!request(next, 'configureCharacters', input, c)) return { changed: false };
         configureCollectionCharacters(next.collection, input.characters, { requestHash: hash(input.requestId), source: c.source, at, defaultTheme: next.preferences.theme });
+        return { changed: true };
+      });
+    },
+    rename(input, context = {}) {
+      let c, name;
+      try {
+        fields(input, ['requestId', 'expectedRevision', 'kind', 'id', 'name'], 'rename'); input = clone(input); c = safeContext(context);
+        option(input.kind, ['achievement', 'character'], 'rename kind'); opaque(input.id, 'rename identity');
+        name = input.name === null ? null : displayName(input.name);
+      } catch (error) { return Promise.reject(error); }
+      return mutate(next => {
+        if (!request(next, 'rename', input, c)) return { changed: false };
+        const record = (input.kind === 'achievement' ? next.definitions : next.collection.characters).find(item => item.id === input.id);
+        if (!record) fail('NOT_FOUND', 'The display name identity does not exist.');
+        if (input.kind === 'achievement' && record.scope === 'current_workspace' && c.source === 'model' && c.workspaceKey !== record.workspaceKey) fail('WORKSPACE_MISMATCH', 'This model rename does not belong to the bound workspace.');
+        const bucket = input.kind === 'achievement' ? 'achievements' : 'characters';
+        if (name === null) {
+          if (next.displayNames) {
+            delete next.displayNames[bucket][input.id];
+            if (!Object.keys(next.displayNames.achievements).length && !Object.keys(next.displayNames.characters).length) delete next.displayNames;
+          }
+        } else {
+          next.displayNames ??= { achievements: {}, characters: {} };
+          next.displayNames[bucket][input.id] = name;
+        }
         return { changed: true };
       });
     },
