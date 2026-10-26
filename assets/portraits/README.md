@@ -1,6 +1,6 @@
 # Generated character portrait atlases
 
-Ten transparent WebP atlases, one per theme, cover the eighty built-in characters.
+Twenty transparent WebP atlases cover ten themes in flat and pixel styles, sharing eighty character identities.
 Each atlas has four columns and two rows; character order follows the canonical
 IDs in `src/portrait-manifest.json`. Custom uploads override these default images.
 

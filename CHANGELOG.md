@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0
+
+Prepare the first stable package as `dsh-achievement-helper`. Retain the local
+achievement journal, browser retry keys, plugin identity and four model tools.
+Add the new public API route with the previous route as an authenticated alias.
+Include release instructions, content and Git identity checks, and frozen
+artifact verification. This version is a local release candidate until the
+public channels have been verified.
+
 ## 0.2.0-rc.6
 
 Reduce achievement collection cards to about half their previous height. Pair a

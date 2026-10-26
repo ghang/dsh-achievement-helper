@@ -5,7 +5,7 @@ import { join } from 'node:path';
 export const themes = ['explorer', 'xianxia', 'cyber', 'wuxia', 'fantasy', 'space', 'ocean', 'garden', 'academy', 'steampunk'];
 export const styles = ['flat', 'pixel'];
 export const labels = { flat: '清爽扁平', pixel: '微像素' };
-export const prefix = '/dsh-achievement-journal/api/assets/portraits/';
+export const prefix = '/dsh-achievement-helper/api/assets/portraits/';
 
 // Synthetic static RIFF/VP8L headers: these fixtures exercise container,
 // routing and packaging contracts, and do not claim to be decoded artwork.

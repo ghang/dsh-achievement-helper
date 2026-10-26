@@ -22,7 +22,7 @@ test('HTTP admission, input limits, preferences, conflict and immutable report p
   const server = createServer((req, res) => { void handler(req, res); });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await service.dispose(); await rm(dir, { recursive: true, force: true }); });
-  const base = `http://127.0.0.1:${server.address().port}/dsh-achievement-journal/api`;
+  const base = `http://127.0.0.1:${server.address().port}/dsh-achievement-helper/api`;
   const request = (path, value, extra = {}) => fetch(base + path, { method: value === undefined ? 'GET' : 'POST',
     headers: { 'x-fixture-peer': 'browser', ...(value === undefined ? {} : { 'content-type': 'application/json' }), ...extra },
     ...(value === undefined ? {} : { body: JSON.stringify(value) }) });

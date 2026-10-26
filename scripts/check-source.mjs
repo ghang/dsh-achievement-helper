@@ -1,0 +1,10 @@
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { auditFiles, sourceFiles } from './release-audit.mjs';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const files = await sourceFiles(root);
+const tracked = spawnSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' });
+if (tracked.status !== 0) throw new Error('An independent Git checkout is required.');
+const unexpected = tracked.stdout.split('\0').filter(file => file && !files.includes(file));
+if (unexpected.length) throw new Error('Tracked files outside the public whitelist: ' + JSON.stringify(unexpected));
+console.log(JSON.stringify({ status: 'passed', scope: 'current-public-source', ...(await auditFiles(root, files)) }));

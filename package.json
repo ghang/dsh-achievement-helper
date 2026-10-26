@@ -1,6 +1,6 @@
 {
-  "name": "dsh-achievement-journal",
-  "version": "0.2.0-rc.6",
+  "name": "dsh-achievement-helper",
+  "version": "0.2.0",
   "description": "A personal, themed achievement journal for DeepSeek Harness: real progress, badges and model-configured milestones.",
   "type": "module",
   "main": "lib/index.mjs",
@@ -16,7 +16,8 @@
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "docs"
   ],
   "dsh": {
     "bundle": {
@@ -49,7 +50,11 @@
     "build": "node scripts/build.mjs",
     "prepack": "npm run build",
     "test": "node --test --test-reporter=tap tests/*.test.mjs",
-    "check:package": "node scripts/check-package.mjs"
+    "check:package": "node scripts/check-package.mjs",
+    "check:identity": "node scripts/check-identity.mjs --all",
+    "check:source": "node scripts/check-source.mjs",
+    "check:release": "npm run check:identity && npm run check:source && npm run check:package",
+    "verify:public": "node scripts/verify-public.mjs"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.5",
@@ -80,5 +85,21 @@
   "publishConfig": {
     "registry": "https://registry.npmjs.org/",
     "access": "public"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ghang/dsh-achievement-helper.git"
+  },
+  "homepage": "https://github.com/ghang/dsh-achievement-helper#readme",
+  "bugs": {
+    "url": "https://github.com/ghang/dsh-achievement-helper/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "achievements",
+    "badges",
+    "themes"
+  ],
+  "author": "ghang"
 }

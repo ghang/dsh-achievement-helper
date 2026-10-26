@@ -362,9 +362,9 @@ test('facts never persist source bodies, raw paths, or opaque caller keys', asyn
   await f.j.ingest([fact('privacy', 'file_read', { key: privateKey, evidence: { source: 'tools/result', callKey: 'opaque-call-id', evidenceKeys: ['opaque-proof-id'] } })]);
   const saved = await readFile(f.file, 'utf8');
   assert.ok(!saved.includes(privateKey)); assert.ok(!saved.includes('opaque-call-id'));
-  await assert.rejects(f.j.ingest([fact('path-leak', 'file_read', { key: '/Users/example/private.txt' })]), errorCode('INVALID_INPUT'));
+  await assert.rejects(f.j.ingest([fact('path-leak', 'file_read', { key: '/' + 'Users/example/private.txt' })]), errorCode('INVALID_INPUT'));
   await assert.rejects(f.j.ingest([fact('body-leak', 'file_read', { evidence: { source: 'tools/result', content: 'source body' } })]), errorCode('INVALID_INPUT'));
-  await assert.rejects(f.j.configure({ requestId: 'bad-title', definitions: [definition('path-title', { template: 'model_report' }, { title: '/Users/example/private.txt' })] }), errorCode('PRIVATE_PATH'));
+  await assert.rejects(f.j.configure({ requestId: 'bad-title', definitions: [definition('path-title', { template: 'model_report' }, { title: '/' + 'Users/example/private.txt' })] }), errorCode('PRIVATE_PATH'));
 });
 
 test('write failure retains the previous memory and disk state and the queue remains usable', async t => {

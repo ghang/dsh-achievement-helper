@@ -8,7 +8,7 @@ import { THEME_IDS, ICON_IDS } from './collection.mjs';
 export const PORTRAIT_LIMITS = Object.freeze({ assetBytes: 1024 * 1024, totalBytes: 12 * 1024 * 1024, manifestBytes: 128 * 1024 });
 export const PORTRAIT_STYLE_IDS = Object.freeze(['flat', 'pixel']);
 export const PORTRAIT_STYLE_LABELS = Object.freeze({ flat: '清爽扁平', pixel: '微像素' });
-const PREFIX = '/dsh-achievement-journal/api/assets/portraits/';
+const PREFIX = '/dsh-achievement-helper/api/assets/portraits/';
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 const defaultManifest = join(moduleDirectory, 'portrait-manifest.json');
 const defaultAssets = basename(moduleDirectory) === 'src' ? join(moduleDirectory, '../assets/portraits') : join(moduleDirectory, 'assets/portraits');

@@ -1,0 +1,13 @@
+# Submission draft, checked against the guide on 2026-10-26:
+# https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md
+# Intended target; this file does not claim the repository or release is public.
+# Submit as data/plugins/ghang__dsh-achievement-helper.yml after publication,
+# the repository-age requirement and the dsh-plugin topic are verified.
+url: https://github.com/ghang/dsh-achievement-helper
+name: ghang/dsh-achievement-helper
+category: fun
+description:
+  en: 'Local themed achievements, badges and character collections for DeepSeek Harness.'
+  zh: '在本地记录 DeepSeek Harness 主题成就、勋章与角色收藏。'
+# Enable only after the stable asset is publicly downloadable and verified:
+# tarball: https://github.com/ghang/dsh-achievement-helper/releases/latest/download/dsh-achievement-helper.tgz

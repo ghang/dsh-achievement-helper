@@ -16,7 +16,7 @@ test('browser debug scope isolates all writes, refuses generation and never fall
   const service=await createAchievementJournal(ctx,{statePath:file,collect:false,registerTools:false});
   const server=createServer((req,res)=>void handler(req,res));server.listen(0,'127.0.0.1');await once(server,'listening');
   t.after(async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));await service.dispose();await rm(dir,{recursive:true,force:true});});
-  const base=`http://127.0.0.1:${server.address().port}/dsh-achievement-journal/api`;
+  const base=`http://127.0.0.1:${server.address().port}/dsh-achievement-helper/api`;
   const request=(path,body,token,extra={})=>fetch(base+path,{headers:{'x-fixture-peer':'browser',...(body===undefined?{}:{'content-type':'application/json'}),...(token?{'x-daj-debug':token}:{}),...extra},...(body===undefined?{}:{method:'POST',body:JSON.stringify(body)})});
   const initial=await(await request('/state')).json(),bytes=await readFile(file);assert.equal(initial.debug.active,false);
   assert.equal((await fetch(base+'/debug/start',{method:'POST'})).status,401);

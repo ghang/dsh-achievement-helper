@@ -9,3 +9,13 @@ out/
 .credentials.yaml
 .DS_Store
 *.tgz
+.npmrc
+.yarnrc
+.git-credentials
+.netrc
+.dsh/
+profiles/
+sessions/
+storages/
+*.log
+*.jsonl*

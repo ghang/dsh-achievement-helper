@@ -178,8 +178,8 @@ test('invalid names, identities, scopes and stale revisions are atomic while exa
   const f = await fixture(t);
   await f.j.configure({ requestId: 'scoped-goal', definitions: [{ id: 'scoped-goal', title: '工作区目标', scope: 'current_workspace', rule: { template: 'model_report' } }] }, { source: 'user', workspaceKey: 'workspace-a' });
   const bytes = await readFile(f.file, 'utf8'), input = { requestId: 'rename-input', expectedRevision: f.j.snapshot().revision, kind: 'achievement', id: 'first', name: '新名字' };
-  for (const name of ['', ' ', '长'.repeat(61), '\n标题', '标题\u0085', '/Users/synthetic/private', '路径(/home/example/a)', 'file:///private/a', 'C:\\private\\a', '~/' + 'secret', 1, {}, undefined]) await assert.rejects(f.j.rename({ ...input, name }, user));
-  for (const changes of [{ kind: 'other' }, { id: 'missing' }, { id: '/Users/synthetic' }, { award: true }, { expectedRevision: 0 }]) await assert.rejects(f.j.rename({ ...input, ...changes }, user));
+  for (const name of ['', ' ', '长'.repeat(61), '\n标题', '标题\u0085', '/' + 'Users/synthetic/private', '路径(' + '/' + 'home/example/a)', 'file:///private/a', 'C:\\private\\a', '~/' + 'secret', 1, {}, undefined]) await assert.rejects(f.j.rename({ ...input, name }, user));
+  for (const changes of [{ kind: 'other' }, { id: 'missing' }, { id: '/' + 'Users/synthetic' }, { award: true }, { expectedRevision: 0 }]) await assert.rejects(f.j.rename({ ...input, ...changes }, user));
   await assert.rejects(f.j.rename({ ...input, id: 'scoped-goal' }, { source: 'model', workspaceKey: 'workspace-b' }), code('WORKSPACE_MISMATCH'));
   assert.equal(await readFile(f.file, 'utf8'), bytes);
   const result = await f.j.rename(input, user); await f.j.preferences({ theme: 'garden' }); const committed = await readFile(f.file, 'utf8');

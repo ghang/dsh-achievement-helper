@@ -12,7 +12,7 @@ function character(overrides = {}) { return { id: 'hero', name: '山海小狐', 
 const PORTRAIT_THEMES = ['explorer', 'xianxia', 'cyber', 'wuxia', 'fantasy', 'space', 'ocean', 'garden', 'academy', 'steampunk'];
 function portraitManifest() {
   return { version: 2, styles: Object.fromEntries(['flat', 'pixel'].map(style => [style, { label: style === 'pixel' ? '微像素' : '清爽扁平', themes: Object.fromEntries(PORTRAIT_THEMES.map(theme => [theme, {
-    url: `/dsh-achievement-journal/api/assets/portraits/${style}/${theme}.webp?version=abc123def456`, columns: 4, rows: 2, aspect: 1,
+    url: `/dsh-achievement-helper/api/assets/portraits/${style}/${theme}.webp?version=abc123def456`, columns: 4, rows: 2, aspect: 1,
     characters: Array.from({ length: 8 }, (_, index) => ({ id: `builtin:${theme}:${index + 1}`, icon: 'fox', column: index % 4, row: Math.floor(index / 4) })),
   }])) }])) };
 }
@@ -101,7 +101,7 @@ function harness(initial = journal(), options = {}) {
   };
   async function fetch(url, options) {
     requests.push({ url, options });
-    const path = url.slice('/dsh-achievement-journal/api'.length).split('?')[0];
+    const path = url.slice('/dsh-achievement-helper/api'.length).split('?')[0];
     const token = options.headers?.['x-daj-debug'];
     const result = body => ({ ok: true, status: 200, json: async () => body });
     const decorate = (value, scope = token) => ({ ...clone(value), debug: scope ? { active: true, sessionId: scope, label: '调试模式' } : { active: false } });
@@ -236,7 +236,7 @@ function harness(initial = journal(), options = {}) {
   }
   const compiled = source.replace("'__ACHIEVEMENT_PORTRAITS__'", JSON.stringify(options.portraits ?? { version: 1, themes: {} }));
   vm.runInNewContext(compiled, { window, document, fetch, AbortController, setTimeout: timer, clearTimeout: clear, console });
-  assert.equal(registration.id, 'dsh-achievement-journal');
+  assert.equal(registration.id, 'dsh-achievement-helper');
   const plugin = registration.factory(name => {
     required.push(name);
     if (name === 'react') return React;
@@ -681,7 +681,7 @@ test('mode switches discard late state responses in both directions and clear a 
 });
 
 test('portrait atlas uses the exact cell crop, user art takes priority and loading failures fall back', async t => {
-  const url = '/dsh-achievement-journal/api/assets/portraits/explorer.webp?version=abc123def456';
+  const url = '/dsh-achievement-helper/api/assets/portraits/explorer.webp?version=abc123def456';
   const portraits = { version: 1, themes: { explorer: { url, columns: 4, rows: 2, aspect: .75, characters: [{ id: 'hero', name: '山海小狐', icon: 'fox', column: 2, row: 1 }] } } };
   const state = journal({ equipment: { badges: [], charm: null, character: 'hero' }, collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [character()], owned: [{ id: 'hero', count: 1, firstAt: 1 }], draws: [] } });
   const app = harness(state, { portraits }); t.after(() => app.cleanup()); await app.ready();
@@ -745,7 +745,7 @@ test('both portrait families cover all ten global themes and keep the same chara
       visible.forEach((card, index) => {
         assert.match(app.textContent(card), new RegExp(theme + '同伴' + (index + 1)));
         const sprite = app.nodes(card).find(node => node.props?.className === 'daj-character-portrait');
-        assert.ok(sprite); assert.equal(sprite.props.style.backgroundImage, `url("/dsh-achievement-journal/api/assets/portraits/${style}/${theme}.webp?version=abc123def456")`);
+        assert.ok(sprite); assert.equal(sprite.props.style.backgroundImage, `url("/dsh-achievement-helper/api/assets/portraits/${style}/${theme}.webp?version=abc123def456")`);
         assert.equal(sprite.props.style.backgroundPosition, `${index % 4 / 3 * 100}% ${Math.floor(index / 4) * 100}%`);
         const art = app.nodes(card).find(node => node.props?.['data-portrait-style']);
         assert.equal(art.props['data-portrait-style'], style); assert.equal(art.props.style['--daj-character-aspect'], 1);
@@ -816,7 +816,7 @@ test('a stale window changing only theme preserves another window portrait style
 test('an unavailable or mismatched selected portrait family falls back without requesting another theme or a remote image', async t => {
   const hero = character({ id: 'builtin:explorer:1' });
   const initial = journal({ preferences: { theme: 'explorer', portraitStyle: 'pixel', reducedMotion: 'system' }, equipment: { badges: [], charm: null, character: hero.id }, collection: { points: { earned: 0, spent: 0, balance: 0 }, characters: [hero], owned: [{ id: hero.id, count: 1, firstAt: 1 }], draws: [] } });
-  for (const invalid of ['missing', '/dsh-achievement-journal/api/assets/portraits/flat/explorer.webp?version=abc123def456', '/dsh-achievement-journal/api/assets/portraits/pixel/xianxia.webp?version=abc123def456', 'https://example.invalid/portrait.webp']) {
+  for (const invalid of ['missing', '/dsh-achievement-helper/api/assets/portraits/flat/explorer.webp?version=abc123def456', '/dsh-achievement-helper/api/assets/portraits/pixel/xianxia.webp?version=abc123def456', 'https://example.invalid/portrait.webp']) {
     const portraits = portraitManifest();
     if (invalid === 'missing') delete portraits.styles.pixel;
     else portraits.styles.pixel.themes.explorer.url = invalid;

@@ -17,7 +17,7 @@ test('authenticated collection flow preserves points across duplicate draws, val
   const service=await createAchievementJournal(ctx,{statePath:join(dir,'state.json'),collect:false,registerTools:false});
   const server=createServer((req,res)=>void handler(req,res));server.listen(0,'127.0.0.1');await once(server,'listening');
   t.after(async()=>{server.closeAllConnections();await new Promise(r=>server.close(r));await service.dispose();await rm(dir,{recursive:true,force:true});});
-  const base=`http://127.0.0.1:${server.address().port}/dsh-achievement-journal/api`;
+  const base=`http://127.0.0.1:${server.address().port}/dsh-achievement-helper/api`;
   const post=(path,body,headers={})=>fetch(base+path,{method:'POST',headers:{'content-type':'application/json','x-fixture-peer':'browser',...headers},body:JSON.stringify(body)});
   assert.equal((await fetch(base+'/draw',{method:'POST'})).status,401);
   assert.equal((await post('/preferences',{theme:'xianxia'})).status,200);

@@ -20,4 +20,4 @@ for (const style of PORTRAIT_STYLE_IDS) await mkdir(join(root, 'lib/assets/portr
 for (const { file } of verified.assets) await copyFile(join(root, 'assets/portraits', file), join(root, 'lib/assets/portraits', file));
 await writeFile(join(root, 'lib/portrait-manifest.json'), JSON.stringify(portraits.metadata, null, 2) + '\n');
 await (await createPortraitAssets({ manifestFile: join(root, 'lib/portrait-manifest.json'), assetsDir: join(root, 'lib/assets/portraits') })).verifyAll();
-console.error(`dsh-achievement-journal: clean host/client build complete; ${verified.assets.length} portrait sheets / ${verified.totalBytes} bytes`);
+console.error(`dsh-achievement-helper: clean host/client build complete; ${verified.assets.length} portrait sheets / ${verified.totalBytes} bytes`);

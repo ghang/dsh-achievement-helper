@@ -18,7 +18,7 @@ test('display renaming requires the owner browser, retains real progress and rem
   const service = await createAchievementJournal(ctx, { statePath: file, collect: false, registerTools: false });
   const server = createServer((req, res) => void handler(req, res)); server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await service.dispose(); await rm(dir, { recursive: true, force: true }); });
-  const base = `http://127.0.0.1:${server.address().port}/dsh-achievement-journal/api`;
+  const base = `http://127.0.0.1:${server.address().port}/dsh-achievement-helper/api`;
   const request = (path, body, scope, headers = {}) => fetch(base + path, {
     method: body === undefined ? 'GET' : 'POST',
     headers: { 'x-fixture-peer': 'browser', ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...(scope ? { 'x-daj-debug': scope } : {}), ...headers },

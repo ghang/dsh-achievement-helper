@@ -6,7 +6,7 @@
       "themes": {
         "explorer": {
           "file": "explorer.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/flat/explorer.webp?version=637c439db2a4",
+          "url": "/dsh-achievement-helper/api/assets/portraits/flat/explorer.webp?version=637c439db2a4",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -75,7 +75,7 @@
         },
         "xianxia": {
           "file": "xianxia.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/flat/xianxia.webp?version=1d2a9949913a",
+          "url": "/dsh-achievement-helper/api/assets/portraits/flat/xianxia.webp?version=1d2a9949913a",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -144,7 +144,7 @@
         },
         "cyber": {
           "file": "cyber.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/flat/cyber.webp?version=1d28651436af",
+          "url": "/dsh-achievement-helper/api/assets/portraits/flat/cyber.webp?version=1d28651436af",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -213,7 +213,7 @@
         },
         "wuxia": {
           "file": "wuxia.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/flat/wuxia.webp?version=dc106d1effac",
+          "url": "/dsh-achievement-helper/api/assets/portraits/flat/wuxia.webp?version=dc106d1effac",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -282,7 +282,7 @@
         },
         "fantasy": {
           "file": "fantasy.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/flat/fantasy.webp?version=b3fd9d366162",
+          "url": "/dsh-achievement-helper/api/assets/portraits/flat/fantasy.webp?version=b3fd9d366162",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -351,7 +351,7 @@
         },
         "space": {
           "file": "space.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/flat/space.webp?version=47fff039c940",
+          "url": "/dsh-achievement-helper/api/assets/portraits/flat/space.webp?version=47fff039c940",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -420,7 +420,7 @@
         },
         "ocean": {
           "file": "ocean.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/flat/ocean.webp?version=86fad76fb420",
+          "url": "/dsh-achievement-helper/api/assets/portraits/flat/ocean.webp?version=86fad76fb420",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -489,7 +489,7 @@
         },
         "garden": {
           "file": "garden.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/flat/garden.webp?version=ba4968ed0442",
+          "url": "/dsh-achievement-helper/api/assets/portraits/flat/garden.webp?version=ba4968ed0442",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -558,7 +558,7 @@
         },
         "academy": {
           "file": "academy.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/flat/academy.webp?version=92455e708a8d",
+          "url": "/dsh-achievement-helper/api/assets/portraits/flat/academy.webp?version=92455e708a8d",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -627,7 +627,7 @@
         },
         "steampunk": {
           "file": "steampunk.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/flat/steampunk.webp?version=6d6b57afe7d8",
+          "url": "/dsh-achievement-helper/api/assets/portraits/flat/steampunk.webp?version=6d6b57afe7d8",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -701,7 +701,7 @@
       "themes": {
         "explorer": {
           "file": "explorer.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/explorer.webp?version=8a706188ff9d",
+          "url": "/dsh-achievement-helper/api/assets/portraits/pixel/explorer.webp?version=8a706188ff9d",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -770,7 +770,7 @@
         },
         "xianxia": {
           "file": "xianxia.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/xianxia.webp?version=18ee3273bc65",
+          "url": "/dsh-achievement-helper/api/assets/portraits/pixel/xianxia.webp?version=18ee3273bc65",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -839,7 +839,7 @@
         },
         "cyber": {
           "file": "cyber.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/cyber.webp?version=c1eddbf9beeb",
+          "url": "/dsh-achievement-helper/api/assets/portraits/pixel/cyber.webp?version=c1eddbf9beeb",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -908,7 +908,7 @@
         },
         "wuxia": {
           "file": "wuxia.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/wuxia.webp?version=dcc7790c87eb",
+          "url": "/dsh-achievement-helper/api/assets/portraits/pixel/wuxia.webp?version=dcc7790c87eb",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -977,7 +977,7 @@
         },
         "fantasy": {
           "file": "fantasy.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/fantasy.webp?version=f140c07789f5",
+          "url": "/dsh-achievement-helper/api/assets/portraits/pixel/fantasy.webp?version=f140c07789f5",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -1046,7 +1046,7 @@
         },
         "space": {
           "file": "space.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/space.webp?version=fa41c46c0082",
+          "url": "/dsh-achievement-helper/api/assets/portraits/pixel/space.webp?version=fa41c46c0082",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -1115,7 +1115,7 @@
         },
         "ocean": {
           "file": "ocean.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/ocean.webp?version=78ae3ec09f78",
+          "url": "/dsh-achievement-helper/api/assets/portraits/pixel/ocean.webp?version=78ae3ec09f78",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -1184,7 +1184,7 @@
         },
         "garden": {
           "file": "garden.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/garden.webp?version=b75ac6098e1d",
+          "url": "/dsh-achievement-helper/api/assets/portraits/pixel/garden.webp?version=b75ac6098e1d",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -1253,7 +1253,7 @@
         },
         "academy": {
           "file": "academy.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/academy.webp?version=e0d80fbe0b0f",
+          "url": "/dsh-achievement-helper/api/assets/portraits/pixel/academy.webp?version=e0d80fbe0b0f",
           "columns": 4,
           "rows": 2,
           "aspect": 1,
@@ -1322,7 +1322,7 @@
         },
         "steampunk": {
           "file": "steampunk.webp",
-          "url": "/dsh-achievement-journal/api/assets/portraits/pixel/steampunk.webp?version=f8cc4c9a3629",
+          "url": "/dsh-achievement-helper/api/assets/portraits/pixel/steampunk.webp?version=f8cc4c9a3629",
           "columns": 4,
           "rows": 2,
           "aspect": 1,

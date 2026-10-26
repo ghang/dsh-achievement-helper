@@ -1,6 +1,6 @@
-# DSH 成就手记
+# DSH Achievement Helper · 成就手记
 
-一个轻量的个人成就插件。真实使用积累、文件探索、技能与委派等经历可以变成主题成就；勋章、挂件与历程保存在本地。当前为本地候选，未公开发行。
+`dsh-achievement-helper` 是一个轻量的个人成就插件。真实使用积累、文件探索、技能与委派等经历可以变成主题成就；勋章、挂件与历程保存在本地。发布状态以对应GitHub Release和npm版本元数据为准；本地构建不代表公开发行。
 
 支持探索、修仙、赛博朋克、武侠、奇幻、星际、深海、花园、学院和蒸汽十套主题。顶部只保留一个主题选择，成就文案、角色卡池、抽卡、自定义生成和调试抽取都使用当前主题。获得记录和收藏保持稳定，展示框只展示当前主题的已佩戴角色；未更换佩戴时，切回该主题恢复显示。日常记录、抽卡和反馈不调用模型；只有点击模型生成按钮才发起一次有界的辅助请求。
 
@@ -55,19 +55,26 @@
 使用已构建并验证的本地 tgz，仅安装到 `web` profile：
 
 ```sh
-dsh plugin --profile web add /absolute/path/dsh-achievement-journal-0.2.0-rc.6.tgz
+dsh plugin --profile web add /absolute/path/dsh-achievement-helper-0.2.0.tgz
 ```
 
-这是本地自研候选，不是市场插件。卸载：
+包名从开发期的 `dsh-achievement-journal` 改为 `dsh-achievement-helper`。已有旧包时，在空闲回合停宿主并备份插件专属存储，先移除旧包再装新包，保留原存储；不要同时启用两个包。新包沿用旧Cordis身份、存储目录、浏览器重试键和四项模型工具，旧HTTP入口兼容到新入口。
 
 ```sh
 dsh plugin --profile web remove dsh-achievement-journal
+dsh plugin --profile web add /absolute/path/dsh-achievement-helper-0.2.0.tgz
+```
+
+0.2.0的公开仓、Release、npm和插件榜分别核验回执。公开后可通过npm同名包或GitHub Release预构建tgz安装；发布步骤见[RELEASING](docs/RELEASING.md)，首版说明见[0.2.0](docs/releases/0.2.0.md)。卸载：
+
+```sh
+dsh plugin --profile web remove dsh-achievement-helper
 ```
 
 卸载停止工具、事件观察和界面，清理其调试副本；真实档案保留，重装可恢复。本版沿用schema v2，已有v2不因读取或后台事实而补写画风默认值；首次保存偏好后写入新字段portraitStyle。旧v1首次升级保留成就、去重、佩戴与偏好并补计点数。升级前备份整个插件专属存储：首次成功改名会写入可选displayNames覆盖和永久请求去重记录，旧rc.4及之前严格reader不能读取；即使恢复原名，rename请求记录仍保留，也不能直接降级。只读取旧档案不会补写改名数据。旧抽卡记录参与保底计数，不补发或重算历史结果；超过50张的旧连败记录从下一张兑现SSR。首次偏好保存写入portraitStyle后，旧rc.3也无法读取主档案；安全降级需停宿主并恢复配套完整备份，不可覆盖之后新活动。需要清除个人档案时先停宿主、备份后移除专用存储目录，不修改Session真源。没有历史导入或跨设备合并。
 
 ## 开发与验证
 
-使用 Node 22.19 或 24+。`npm ci --ignore-scripts` 安装锁定开发依赖，`npm test` 验证领域、采集、工具与 HTTP 集成；`npm run build` 干净构建；`npm run check:package` 完整验证源码、构建及实际 tgz 的关键集成。不要在指向运行 profile 的依赖软链上执行安装或构建。
+使用 Node 22.19 或 24+。`node scripts/install-dev.mjs` 使用空配置和官方源安装锁定开发依赖，`npm test` 验证领域、采集、工具与 HTTP 集成；`npm run build` 干净构建；`npm run check:package` 完整验证源码、构建及实际 tgz 的关键集成。不要在指向运行 profile 的依赖软链上执行安装或构建。
 
 测试只使用合成记录和本机假上游。源码测试与真实宿主安装、浏览器验证分开留证；本地候选不等于公开发行或收费模型质量验收。

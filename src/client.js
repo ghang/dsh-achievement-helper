@@ -1,6 +1,6 @@
 /* DSH browser entry. Uses the host's React; no bundled runtime or remote assets. */
 window.__ModuleLoader__.load({
-  id: 'dsh-achievement-journal',
+  id: 'dsh-achievement-helper',
   factory(require) {
     'use strict';
     const React = require('react');
@@ -9,7 +9,8 @@ window.__ModuleLoader__.load({
     const h = React.createElement;
     const STYLE = '__ACHIEVEMENT_CSS__';
     const PORTRAITS = '__ACHIEVEMENT_PORTRAITS__';
-    const API = '/dsh-achievement-journal/api';
+    const API = '/dsh-achievement-helper/api';
+    // Retain existing pending draw/generation/debug keys across the package rename.
     const POLL_MS = 1800;
     const THEMES = {
       explorer: {
@@ -229,7 +230,7 @@ window.__ModuleLoader__.load({
       const manifest = PORTRAITS && typeof PORTRAITS === 'object' ? PORTRAITS : {};
       const family = manifest.styles && manifest.styles[style];
       const atlas = manifest.styles ? family && family.themes && family.themes[character.theme] : style === 'flat' && manifest.themes && manifest.themes[character.theme];
-      const url = atlas && /^\/dsh-achievement-journal\/api\/assets\/portraits\/(?:(flat|pixel)\/)?([a-z0-9_-]+)\.webp(?:\?version=[a-f0-9]+)?$/.exec(atlas.url || '');
+      const url = atlas && /^\/dsh-achievement-helper\/api\/assets\/portraits\/(?:(flat|pixel)\/)?([a-z0-9_-]+)\.webp(?:\?version=[a-f0-9]+)?$/.exec(atlas.url || '');
       if (!atlas || !url || url[2] !== character.theme || (manifest.styles ? url[1] !== style : Boolean(url[1] && url[1] !== style)) || !Number.isInteger(atlas.columns) || !Number.isInteger(atlas.rows) || atlas.columns < 1 || atlas.rows < 1) return null;
       const cell = array(atlas.characters).find(function (item) { return item.id === character.id; }) || array(atlas.characters).find(function (item) { return item.icon === character.icon; }) || array(atlas.characters)[0];
       if (!cell || !Number.isInteger(cell.column) || !Number.isInteger(cell.row) || cell.column < 0 || cell.row < 0 || cell.column >= atlas.columns || cell.row >= atlas.rows) return null;
@@ -1447,8 +1448,8 @@ window.__ModuleLoader__.load({
         const dispose = ctx.slots.inject(name, function () { return ctx.slots.register(Object.assign({ name: name, id: id, order: order }, options || {}), component); });
         if (typeof dispose === 'function') disposers.push(dispose);
       }
-      slot('settings.section', 'dsh-achievement-journal', 210, SettingsSection, { label: '成就手记' });
-      slot('sidebar.footer.action', 'dsh-achievement-journal-entry', 9990, SidebarEntry);
+      slot('settings.section', 'dsh-achievement-helper', 210, SettingsSection, { label: '成就手记' });
+      slot('sidebar.footer.action', 'dsh-achievement-helper-entry', 9990, SidebarEntry);
       if (typeof window.matchMedia === 'function') {
         const media = window.matchMedia('(prefers-reduced-motion: reduce)');
         const motion = function () { publish({ motionVersion: snapshot.motionVersion + 1 }); };
@@ -1484,7 +1485,7 @@ window.__ModuleLoader__.load({
         style.remove();
         listeners.clear(); surfaceOwners.clear(); seenNotifications.clear(); staticArtCache.clear();
         flight = null; catalogFlight = null; generationFlight = null; clientContext = null; actionCount = 0;
-      }; }, 'dsh-achievement-journal client cleanup');
+      }; }, 'dsh-achievement-helper client cleanup');
     }
     return { inject: ['slots'], apply: apply };
   },

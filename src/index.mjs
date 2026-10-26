@@ -12,12 +12,14 @@ import { THEME_IDS, ICON_IDS, ANIMATION_IDS } from './collection.mjs';
 import { createDebugController } from './debug.mjs';
 import { servePortraitAsset } from './portrait-assets.mjs';
 
+// Keep the Cordis identity and storage namespace stable across the package rename.
 export const name = 'achievement-journal';
 export const inject = ['tools', 'sessions', 'webServer', 'connection', 'llm'];
 export const Config = z.object({
   statePath: z.string().default('').description('成就档案文件；留空使用当前 DSH_HOME 下的独立存储。'),
 });
-const API = '/dsh-achievement-journal/api';
+const API = '/dsh-achievement-helper/api';
+const LEGACY_API = '/dsh-achievement-journal/api';
 const METRICS = ['tokens', 'turn_completed', 'file_read', 'file_changed', 'format_read', 'skill_loaded',
   'delegate_completed', 'file_presented', 'route_used', 'recall_used', 'recipe', 'model_report'];
 const TEMPLATES = ['count', 'distinct', 'first_seen', 'recipe', 'model_report'];
@@ -314,11 +316,14 @@ export async function createAchievementJournal(ctx, config = {}) {
       execute: async (args, exec) => { const s = await mutate('report', args, context(exec)); return { revision: s.revision, award: s.awards.find(a => a.definitionId === args.definitionId) }; } });
   }
   if (config.registerHttp !== false) {
-    disposers.push(ctx.webServer.register({ kind: 'prefix', path: API, handler: async (req, res) => {
+    const handler = async (req, res) => {
       try {
         const admission = ctx.connection.admit(req);
         if ('rejection' in admission) return json(res, admission.rejection, { error: '需要 DSH 浏览器登录。' });
         if (admission.peer.id !== ctx.connection.browserPeer.id) return json(res, 403, { error: '仅当前浏览器用户可访问。' });
+        // Rewrite only the admitted legacy prefix, preserving the raw suffix so
+        // asset traversal checks and all body/owner/origin gates still apply.
+        if (req.url === LEGACY_API || req.url.startsWith(LEGACY_API + '/') || req.url.startsWith(LEGACY_API + '?')) req.url = API + req.url.slice(LEGACY_API.length);
         const url = new URL(req.url, 'http://local'); const path = url.pathname;
         if (await servePortraitAsset(req, res, url)) return;
         const scope = req.headers['x-daj-debug'];
@@ -380,7 +385,8 @@ export async function createAchievementJournal(ctx, config = {}) {
         const status = e.status ?? (storageError ? 503 : /CONFLICT|ARCHIVED|IMMUTABLE|REQUEST_ID_REUSED|INSUFFICIENT_POINTS|NOT_OWNED/.test(code) ? 409 : e.name === 'JournalError' || code.includes('INVALID') ? 400 : 500);
         json(res, status, { error: COLLECTION_ERRORS[code] || (code.startsWith('GENERATION_') || code.startsWith('DEBUG_') || status < 500 ? e.message : '成就存储暂不可用，已保留原档案，请查看宿主日志。'), code: e.code ?? 'JOURNAL_UNAVAILABLE' });
       }
-    } }));
+    };
+    for (const prefix of [API, LEGACY_API]) disposers.push(ctx.webServer.register({ kind: 'prefix', path: prefix, handler }));
   }
   return { journal, collector, generation, debug, snapshot: state, catalog, mutate,
     async dispose() {
