@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0-rc.6
+
+Reduce achievement collection cards to about half their previous height. Pair a
+half-height badge with the title and source, keep progress on its own full-width
+row, and retain readable text, selection and equipment controls across narrow
+windows. No data, model-tool, character-art or rule changes.
+
 ## 0.2.0-rc.5
 
 Update the eight xianxia display ranks without changing archived card identities.
