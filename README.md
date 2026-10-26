@@ -1,5 +1,9 @@
 # DSH Achievement Helper · 成就手记
 
+> **语言支持：目前仅提供简体中文（`zh-CN`）界面。** 内置主题、成就和角色文案尚未国际化，切换 DSH 的显示语言不会切换本插件语言。用户自定义名称会保留原文。
+>
+> **Language support: Simplified Chinese only (`zh-CN`).** The UI and built-in theme, achievement and character text are not currently localized into other languages. Changing DSH's display language does not change this plugin's language. Custom names are preserved as entered.
+
 `dsh-achievement-helper` 是一个轻量的个人成就插件。真实使用积累、文件探索、技能与委派等经历可以变成主题成就；勋章、挂件与历程保存在本地。发布状态以对应GitHub Release和npm版本元数据为准；本地构建不代表公开发行。
 
 支持探索、修仙、赛博朋克、武侠、奇幻、星际、深海、花园、学院和蒸汽十套主题。顶部只保留一个主题选择，成就文案、角色卡池、抽卡、自定义生成和调试抽取都使用当前主题。获得记录和收藏保持稳定，展示框只展示当前主题的已佩戴角色；未更换佩戴时，切回该主题恢复显示。日常记录、抽卡和反馈不调用模型；只有点击模型生成按钮才发起一次有界的辅助请求。
