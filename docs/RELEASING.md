@@ -15,12 +15,13 @@
 ```sh
 git status --short
 git remote -v
+gh auth status --hostname github.com
 gh api user --jq '{login, id}'
 npm run check:identity -- --all
 npm run check:source
 ```
 
-目标 GitHub 账号为 `ghang`，已核对的 ID 为 `12455956`。首次建仓前，仓库 URL 只是计划目标；再次接手时先查询实际远端，已有目标仓库就沿用，不重复创建。包名是否可用、准确版本是否已存在也要在实际上传前重新查询。
+目标 GitHub 账号为 `ghang`，已核对的 ID 为 `12455956`。维护环境已具备 GitHub CLI，正常发行复用现有认证；账号检查通过后不重复安装、登录或改用浏览器上传。首次建仓前，仓库 URL 只是计划目标；再次接手时先查询实际远端，已有目标仓库就沿用，不重复创建。包名是否可用、准确版本是否已存在也要在实际上传前重新查询。
 
 完成版本、锁文件、README、CHANGELOG、本文及[版本说明](releases/0.2.0.md)的审核后，将明确的本次文件清单暂存并检查 `git diff --cached --check`、`git diff --cached`，形成待发行的本地提交。不要使用未审查的工作区给版本打 tag。
 
@@ -42,6 +43,8 @@ npm run check:release
 | `check:package` | 源码回归、干净构建、实际 tgz 的清单、入口、素材和解包集成；绑定源码提交与树 |
 
 完整检查已包含源码测试，不必在它之前重复全跑 `npm test`。失败或跳过不能标记为完整通过。实际宿主与浏览器验收仍需对这份候选单独留证，源码/解包回归不等于已经安装或公开发布。
+
+公开仓的 `.github/workflows/check.yml` 在分支 push、PR 和手动触发时运行 Node `22.19.0`、`24.18.1` 两个门禁；job 名分别为 `check (22.19.0)`、`check (24.18.1)`。报告始终尝试保留，成功后保留实际 tgz 14 天。tag push 不重复完整门禁，发行复用同一来源 SHA 已成功的分支或手动 run，并单独核对个人附注 tag。workflow 只读仓库，不自动发布。工作流文件存在或本地验证成功都不能当作远端 CI 已通过。
 
 本地输出保存在被忽略的 `.release/`：
 
@@ -72,9 +75,13 @@ dsh plugin --profile web add /absolute/path/dsh-achievement-helper-0.2.0.tgz
 
 rc.5/rc.6 的既有档案保持同一数据协议。首次改名后，永久请求去重记录使旧 rc.4 及之前的严格 reader 无法读取，即使恢复原名也不能直接降级；较早版本另有画风、生成数量及 schema 的限制。降级须停宿主并恢复对应版本的完整存储备份，不能用旧备份覆盖后续新活动。首次公开版本没有上一公开稳定包可供回滚。
 
-## 4. 建仓、推送与 GitHub Release
+## 4. 首次远端准备与 GitHub Release
 
 本节及后续 npm/投稿命令会写入外部服务，仅在本次版本与目标渠道的发布授权明确后执行。当前整理发布材料的任务不执行这些写入。以下示例固定为首版 `0.2.0`，后续版本需先更新并复核。
+
+GitHub 发行优先使用维护方 Deepseek Lab 的通用 `tools/plugin-release` 工具。它上传已冻结的原包，不构建，不创建仓库、commit、tag，不 push，也不发布 npm。首次公开仓、origin、提交推送、真实 CI 和个人附注 tag 仍是未来获得相应授权后完成的步骤；工具就绪不代表这些步骤已经完成。
+
+### 4.1 首次建仓、推送与 CI
 
 ```sh
 RELEASE_REPO='ghang/dsh-achievement-helper'
@@ -82,8 +89,6 @@ RELEASE_TAG='v0.2.0'
 RELEASE_COMMIT='<release-plan.json 中已核对的 sourceCommit>'
 RELEASE_ARTIFACT="$(pwd)/.release/dsh-achievement-helper.tgz"
 ```
-
-本机若没有GitHub CLI，可使用已登录 `ghang` 的浏览器：在 GitHub「New repository」创建同名公开空仓（不初始化README/许可证），在仓库设置添加 `dsh-plugin` topic；本地用 `git remote add origin` 配好同一SSH地址并推送审核提交与tag。CI通过后，在 Releases 创建对应tag的draft，上传下述同一tgz及校验和，核对附件再公开。下列 `gh` 命令是已安装并登录CLI时的可选等价路径，不要求改动全局CLI或公司配置。
 
 CHECK：账号、提交、准确版本及已有远端状态符合本次计划。仅当仓库尚未创建且本地没有 `origin` 时，创建目标仓库并使用 SSH 远端；不附加另一套 README、许可或历史：
 
@@ -96,12 +101,44 @@ git push origin "$RELEASE_COMMIT:refs/heads/main"
 gh repo edit "$RELEASE_REPO" --default-branch main --add-topic dsh-plugin
 ```
 
-首次推送只发送审核过的发行提交及其既有独立历史，不使用 `--mirror` 或强制推送。已有仓库时只推本次审核过的提交。建仓和分支/topic 命令见 [GitHub CLI 建仓](https://cli.github.com/manual/gh_repo_create)与[仓库设置](https://cli.github.com/manual/gh_repo_edit)，核查日期：2026-10-26。待目标提交的 CI 结果通过后创建附注 tag，再检查 tagger 与全部历史并推送：
+首次推送只发送审核过的发行提交及其既有独立历史，不使用 `--mirror` 或强制推送。已有仓库时只推本次审核过的提交。建仓和分支/topic 命令见 [GitHub CLI 建仓](https://cli.github.com/manual/gh_repo_create)与[仓库设置](https://cli.github.com/manual/gh_repo_edit)，核查日期：2026-10-26。等待准确来源 SHA 的两个 CI job 成功、未跳过，记录真实 run ID，再创建附注 tag、检查 tagger 与全部历史并推送：
 
 ```sh
 git tag -a "$RELEASE_TAG" "$RELEASE_COMMIT" -m 'dsh-achievement-helper 0.2.0'
 npm run check:identity -- --all
 git push origin "refs/tags/$RELEASE_TAG"
+```
+
+tag 必须仍指向通过 CI 的同一提交；不为 tag push 再跑一轮完整构建。CI 未运行或未成功时停止发行准备中的远端写步骤，不能借用其他包、其他 SHA 或 PR 合成提交的成功结果。
+
+### 4.2 用通用工具发行冻结包
+
+从 Lab 根目录阅读 `tools/plugin-release/README.md` 并准备审核过的发行 manifest，含本机路径的 manifest 留在 Lab。它与本插件 `.release/release-plan.json` 不同：后者是候选来源记录，不能直接作为通用工具输入。manifest 应绑定 `ghang/dsh-achievement-helper`、`0.2.0`、`v0.2.0`、准确 commit、个人身份、冻结报告、包与校验和；带版本 tgz 通过 `extraTarballs` 列出，与固定名 tgz 同字节，校验和覆盖两者。
+
+`ci.workflow` 为 `.github/workflows/check.yml`，`ci.jobs` 为上述两个准确 job 名，`ci.runId` 必须来自已核对的真实成功 run。草案中的 `ci.runId: null` 表示尚未就绪，不能记作 CI 或发行预演通过。没有远端仓库、origin、同 SHA 成功 CI 或个人附注 tag 时，先保留草案，不伪造门禁结果。
+
+只读预演与公开下载复验分别执行；以下路径须替换为本次已审核的 Lab manifest：
+
+```sh
+make release-plan PLAN=/absolute/path/reviewed-release-manifest.json
+make release-verify PLAN=/absolute/path/reviewed-release-manifest.json
+```
+
+`plan` 核对本地与远端条件，`verify` 只匿名下载已经公开的附件并校验。首次发行前没有公开附件，不能以 `verify` 代替候选验收。确认本次 GitHub 公开发行已授权且所有门禁通过后，才执行写入：
+
+```sh
+make release-publish PLAN=/absolute/path/reviewed-release-manifest.json
+```
+
+工具创建草稿、上传缺失资产、下载验包后公开，再匿名下载复验。保留其脱敏回执；已有正式 Release 只核验，不覆盖 tag 或资产。断网或结果未知时先用同一 manifest 重新 `plan`；草稿缺少资产时按工具规则恢复，内容冲突则停止核对。这里不另写本插件专用上传器。
+
+稳定下载文件名始终为 `dsh-achievement-helper.tgz`，供 `releases/latest/download/` 使用；带版本文件名只用于对应 tag 的固定链接。公开后下载和比对通过，才能将 GitHub 渠道标记为已验证。[GitHub Release 操作](https://cli.github.com/manual/gh_release_create)、[草稿发布](https://cli.github.com/manual/gh_release_edit)、[下载链接](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)，核查日期：2026-10-26。
+
+### 4.3 独立维护时的手工 gh 路径
+
+没有 Lab 工具时，可在本公开源码仓使用 GitHub CLI 完成同一流程；沿用 4.1 的身份、来源 SHA、成功 CI 与已推送附注 tag 门禁。本路径是替代入口，同一版本已由通用工具完成后不重复上传。先查询准确 tag 的远端 Release；已有正式版本只下载复验，已有草稿先比对说明和附件，只补缺失资产，绝不使用覆盖选项。仅在确认该 tag 没有 Release 时创建草稿：
+
+```sh
 gh release create "$RELEASE_TAG" \
   .release/dsh-achievement-helper.tgz \
   .release/dsh-achievement-helper-0.2.0.tgz \
@@ -132,11 +169,9 @@ gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" \
 node scripts/verify-public.mjs --channel github
 ```
 
-稳定下载文件名始终为 `dsh-achievement-helper.tgz`，供 `releases/latest/download/` 使用；带版本文件名只用于对应 tag 的固定链接。公开后下载和比对通过，才能将 GitHub 渠道标记为已验证。[GitHub Release 操作](https://cli.github.com/manual/gh_release_create)、[草稿发布](https://cli.github.com/manual/gh_release_edit)、[下载链接](https://docs.github.com/en/repositories/releasing-projects-on-github/linking-to-releases)，核查日期：2026-10-26。
-
 ## 5. npm 官方源发布
 
-使用已有个人配置 `~/.config/dsh-plugin-release/npmrc`，不打印内容、不复制进仓库、不清空或覆盖。`scripts/public-npm.mjs` 固定官方 registry，过滤大小写的 `npm_config_*` 及认证环境覆盖，拒绝通过命令行替换 registry/userconfig/globalconfig，使用源码树外的系统临时目录作为独立空工作目录，cache保留在 `.release/npm-public/`，并保留终端输入输出。公司默认配置不由该脚本修改。npm 配置来自命令行、环境与多级 npmrc，因此 manifest 中的 `publishConfig` 不能单独保证发布目标。[npm 配置规则](https://docs.npmjs.com/cli/v11/configuring-npm/npmrc/)，核查日期：2026-10-26。
+npm 单独使用真实 TTY 与个人认证，通用 GitHub 工具不代为登录或发布。使用已有个人配置 `~/.config/dsh-plugin-release/npmrc`，不打印内容、不复制进仓库、不清空或覆盖。`scripts/public-npm.mjs` 固定官方 registry，过滤大小写的 `npm_config_*` 及认证环境覆盖，拒绝通过命令行替换 registry/userconfig/globalconfig，使用源码树外的系统临时目录作为独立空工作目录，cache保留在 `.release/npm-public/`，并保留终端输入输出。公司默认配置不由该脚本修改。npm 配置来自命令行、环境与多级 npmrc，因此 manifest 中的 `publishConfig` 不能单独保证发布目标。[npm 配置规则](https://docs.npmjs.com/cli/v11/configuring-npm/npmrc/)，核查日期：2026-10-26。
 
 先做只读检查：
 

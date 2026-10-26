@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { THEME_IDS } from '../src/collection.mjs';
 import { PORTRAIT_LIMITS, PORTRAIT_STYLE_IDS, inspectPortraitWebP } from '../src/portrait-assets.mjs';
 import { auditFiles, sourceFiles } from './release-audit.mjs';
+import { publishReleaseMetadata, verifyFrozenCandidate } from './release-sidecars.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const out = join(root, '.release'); await mkdir(out, { recursive: true });
@@ -18,14 +19,17 @@ const git = args => {
 assert.equal(git(['status', '--porcelain']), '', 'Freeze and commit reviewed source before building a release candidate');
 const sourceCommit = git(['rev-parse', 'HEAD']), sourceTree = git(['rev-parse', 'HEAD^{tree}']);
 const sourceAudit = await auditFiles(root, await sourceFiles(root));
+const verifySourceUnchanged = async () => {
+  assert.equal(git(['rev-parse', 'HEAD']), sourceCommit, 'Source commit changed during validation');
+  assert.equal(git(['rev-parse', 'HEAD^{tree}']), sourceTree, 'Source tree changed during validation');
+  assert.equal(git(['status', '--porcelain']), '', 'Source was edited during validation');
+  assert.equal((await auditFiles(root, await sourceFiles(root))).sourceSha256, sourceAudit.sourceSha256, 'Source bytes changed during validation');
+};
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
-const previous = await readFile(join(out, 'package-report.json'), 'utf8').then(JSON.parse).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
+const previous = await readFile(join(out, 'package-report.json'), 'utf8').then(JSON.parse).catch(error => { if (error.code === 'ENOENT') return null; throw new Error('package-report.json: unreadable-or-invalid'); });
 if (previous?.name === manifest.name && previous.version === manifest.version) {
-  assert.equal(previous.node, process.version, 'A frozen report from another Node runtime is not a compatibility test; validate its unpacked artifact explicitly');
-  assert.equal(previous.sourceCommit, sourceCommit, 'This version is already frozen from another commit; prepare a new version/candidate instead of replacing it');
-  assert.equal(previous.sourceSha256, sourceAudit.sourceSha256);
-  assert.equal(previous.sourceTests, 'passed'); assert.equal(previous.artifactTests, 'passed');
-  for (const file of [previous.archive, previous.stableArchive]) assert.equal(createHash('sha256').update(await readFile(file)).digest('hex'), previous.sha256, 'Frozen bytes were changed');
+  await verifyFrozenCandidate(out, previous, { name: manifest.name, version: manifest.version, node: process.version, sourceCommit, sourceTree, sourceSha256: sourceAudit.sourceSha256 });
+  await verifySourceUnchanged();
   console.log(JSON.stringify({ ...previous, reusedFrozenCandidate: true }, null, 2));
   process.exit(0);
 }
@@ -87,10 +91,7 @@ await writeFile(join(out, 'artifact-tests.tap'), artifactTests);
 assert.match(artifactTests, /# fail 0/); assert.match(artifactTests, /# skipped 0/);
 const bytes = await readFile(archive);
 const digest = createHash('sha256').update(bytes).digest('hex');
-assert.equal(git(['rev-parse', 'HEAD']), sourceCommit, 'Source commit changed during validation');
-assert.equal(git(['rev-parse', 'HEAD^{tree}']), sourceTree, 'Source tree changed during validation');
-assert.equal(git(['status', '--porcelain']), '', 'Source was edited during validation');
-assert.equal((await auditFiles(root, await sourceFiles(root))).sourceSha256, sourceAudit.sourceSha256, 'Source bytes changed during validation');
+await verifySourceUnchanged();
 const versionedArchive = join(out, pack.filename), stableArchive = join(out, 'dsh-achievement-helper.tgz');
 for (const file of [versionedArchive, stableArchive]) {
   const existing = await readFile(file).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
@@ -99,9 +100,5 @@ for (const file of [versionedArchive, stableArchive]) {
 }
 const report = { name: manifest.name, version: manifest.version, node: process.version, archive: versionedArchive, stableArchive, sourceCommit, sourceTree, sourceSha256: sourceAudit.sourceSha256, artifact, bytes: bytes.length, sha256: digest,
   files: pack.files.map(f => f.path), sourceTests: 'passed', artifactTests: 'passed', portraitAssets: { status: 'passed', styles: PORTRAIT_STYLE_IDS, files: portraitReport.assets.length, bytes: portraitReport.totalBytes }, published: false };
-await writeFile(join(out, 'package-report.json'), JSON.stringify(report, null, 2) + '\n');
-await writeFile(join(out, 'SHA256SUMS'), `${digest}  ${pack.filename}\n${digest}  dsh-achievement-helper.tgz\n`);
-await writeFile(join(out, 'release-plan.json'), JSON.stringify({ name: manifest.name, version: manifest.version, sourceCommit, sourceTree, sha256: digest, bytes: bytes.length, files: report.files,
-  stableArchive, versionedArchive, gitHub: { repository: 'ghang/dsh-achievement-helper', tag: 'v' + manifest.version, created: false, published: false },
-  npm: { name: manifest.name, version: manifest.version, published: false }, market: { entry: 'data/plugins/ghang__dsh-achievement-helper.yml', submitted: false } }, null, 2) + '\n');
+await publishReleaseMetadata(out, report);
 console.log(JSON.stringify(report, null, 2));
