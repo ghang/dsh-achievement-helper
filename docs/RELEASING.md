@@ -1,6 +1,6 @@
 # 发布流程
 
-维护日期：2026-10-26。首个计划公开版本为 `dsh-achievement-helper@0.2.0`，目标仓库为 `ghang/dsh-achievement-helper`。当前只准备本地候选与发布材料；仓库地址、Release、npm 和市场条目均不代表已经公开。
+维护日期：2026-10-26。`dsh-achievement-helper@0.2.0` 已在 [GitHub Release](https://github.com/ghang/dsh-achievement-helper/releases/tag/v0.2.0) 与 [npm](https://www.npmjs.com/package/dsh-achievement-helper/v/0.2.0) 发行，两处公开下载与冻结包一致。唯一公开仓为 `ghang/dsh-achievement-helper`；插件榜投稿单独办理。README 截图是发行后的仓库文档更新，已发布的 tag 和安装包保持冻结。
 
 发布使用同一份验证过的 tgz：GitHub Release 保存预构建包和校验和，npm 官方公共源提供按包名安装，awesome-dsh-plugin 负责收录与发现。各渠道的上传、公开下载、市场可见和本机升级分别验收。
 
@@ -77,9 +77,9 @@ rc.5/rc.6 的既有档案保持同一数据协议。首次改名后，永久请�
 
 ## 4. 首次远端准备与 GitHub Release
 
-本节及后续 npm/投稿命令会写入外部服务，仅在本次版本与目标渠道的发布授权明确后执行。当前整理发布材料的任务不执行这些写入。以下示例固定为首版 `0.2.0`，后续版本需先更新并复核。
+本节及后续 npm/投稿命令会写入外部服务，仅在本次版本与目标渠道的发布授权明确后执行。以下 `0.2.0` 命令保留首发时的步骤；该版本已经发行，不重复上传。后续版本需先更新版本和候选，再核对授权及渠道状态。
 
-GitHub 发行优先使用维护方 Deepseek Lab 的通用 `tools/plugin-release` 工具。它上传已冻结的原包，不构建，不创建仓库、commit、tag，不 push，也不发布 npm。首次公开仓、origin、提交推送、真实 CI 和个人附注 tag 仍是未来获得相应授权后完成的步骤；工具就绪不代表这些步骤已经完成。
+GitHub 发行优先使用维护方 Deepseek Lab 的通用 `tools/plugin-release` 工具。它上传已冻结的原包，不构建，不创建仓库、commit、tag，不 push，也不发布 npm。首次公开仓和 origin 已建立，后续沿用现有独立历史；每版仍须推送准确来源提交、核对真实 CI 并创建个人附注 tag。
 
 ### 4.1 首次建仓、推送与 CI
 

@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { THEME_IDS } from '../src/collection.mjs';
 import { PORTRAIT_LIMITS, PORTRAIT_STYLE_IDS, inspectPortraitWebP } from '../src/portrait-assets.mjs';
-import { auditFiles, sourceFiles } from './release-audit.mjs';
+import { auditFiles, sourceFiles, README_SCREENSHOT_PATHS } from './release-audit.mjs';
 import { publishReleaseMetadata, verifyFrozenCandidate } from './release-sidecars.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -52,7 +52,7 @@ const pack = JSON.parse(run('npm', ['pack', '--ignore-scripts', '--json', '--pac
   '--cache', join(out, 'npm-cache'), '--userconfig', emptyUser, '--globalconfig', emptyGlobal, '--registry=https://registry.npmjs.org/']))[0];
 const archive = join(staging, pack.filename);
 const portraitFiles = PORTRAIT_STYLE_IDS.flatMap(style => THEME_IDS.map(theme => `lib/assets/portraits/${style}/${theme}.webp`));
-const extraFiles = new Set([...portraitFiles, 'lib/portrait-manifest.json', 'lib/client.css']);
+const extraFiles = new Set([...portraitFiles, ...README_SCREENSHOT_PATHS, 'docs/images/README.md', 'lib/portrait-manifest.json', 'lib/client.css']);
 assert.ok(pack.files.every(file => extraFiles.has(file.path) || /^(package.json|README.md|LICENSE|CHANGELOG.md|cordis.patch.yml|lib\/[^/]+\.(?:mjs|js)|docs\/(?:RELEASING\.md|market-entry\.yml|releases\/0\.2\.0\.md))$/.test(file.path)), 'Unexpected packaged files');
 await auditFiles(root, pack.files.map(file => file.path));
 assert.deepEqual(pack.files.filter(file => file.path.endsWith('.webp')).map(file => file.path).sort(), [...portraitFiles].sort(), 'The tgz must contain exactly the twenty reviewed flat/pixel portrait sheets');
@@ -63,6 +63,7 @@ for (const entry of pack.files) {
     totalPortraitBytes += info.bytes;
     continue; // Raster bytes are validated as bytes, never decoded as UTF-8 prose.
   }
+  if (README_SCREENSHOT_PATHS.includes(entry.path)) continue; // Binary PNG checks were performed by auditFiles above; visual privacy review is separate.
   const text = await readFile(join(root, entry.path), 'utf8');
   assert.ok(!/\/Users\/[A-Za-z0-9_.-]+\/|[?&]token=[A-Za-z0-9_-]{10,}|sk-[A-Za-z0-9]{20,}|BEGIN (?:RSA |OPENSSH )?PRIVATE KEY/.test(text), `Private material in ${entry.path}`);
 }

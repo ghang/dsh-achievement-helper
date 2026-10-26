@@ -4,6 +4,41 @@
 
 支持探索、修仙、赛博朋克、武侠、奇幻、星际、深海、花园、学院和蒸汽十套主题。顶部只保留一个主题选择，成就文案、角色卡池、抽卡、自定义生成和调试抽取都使用当前主题。获得记录和收藏保持稳定，展示框只展示当前主题的已佩戴角色；未更换佩戴时，切回该主题恢复显示。日常记录、抽卡和反馈不调用模型；只有点击模型生成按钮才发起一次有界的辅助请求。
 
+## 实际效果
+
+下面是 0.2.0 的实际界面，使用独立环境中的合成演示档案。图中进度和抽取结果用于展示功能；首次安装从空档案开始，抽取概率以页面显示的规则为准。
+
+成长总览把等级、使用积累、佩戴勋章和下一项成就放在一起。主题切换会改变文案与外观，已有进度继续保留。
+
+![修仙主题的成长总览、使用积累与自选目标](docs/images/overview.png)
+
+成就收藏使用紧凑卡片，展示已解锁勋章、条件和当前进度。可以筛选、查看详情和调整佩戴。
+
+![紧凑成就收藏，展示已解锁勋章和进行中的成就](docs/images/achievements.png)
+
+成就点用于十连抽取主题角色，结果可直接佩戴到成就框；卡池同时展示稀有度、逐卡概率和 SSR 保底进度。这里展示修仙题材的清爽扁平画风。
+
+![修仙主题的角色收藏、十连结果和佩戴入口](docs/images/characters-flat.png)
+
+自定义生成只需勾选数据来源、设置数量和方向，再选择模板风格。点击生成才调用模型，校验通过后自动加入手记；截图仅填写表单，没有发起模型请求。
+
+![自定义生成成就的数据来源、数量、方向和模板风格](docs/images/custom-generation.png)
+
+<details>
+<summary>查看微像素画风与账户展示框</summary>
+
+同一套角色也可以切换为微像素画风，收藏和稀有度保持不变。
+
+![同一修仙角色收藏切换为微像素画风](docs/images/characters-pixel.png)
+
+账户附近的展示框有紧凑、标准、展示三种预设，也支持自定义高度。角色、勋章和挂件可以在保存前实时预览。
+
+![账户展示框的高度预设、角色佩戴和实时预览](docs/images/appearance.png)
+
+</details>
+
+截图来源与公开范围见[素材说明](docs/images/README.md)。
+
 ## 使用
 
 在 DSH 侧栏底部、账户区域旁的展示框打开「成就手记」，或在设置中打开同名页。首次安装为空档案，完成新的工作回合后开始积累。概览查看等级与最近获得；收藏查看条件与佩戴，成就卡采用紧凑布局，图标和卡片高度约为早期版本的一半；历程记录获得和升级。主题与反馈设置提供紧凑32px、标准64px、展示104px和32～160px自定高度，选择时实时预览、保存后应用。反馈可设为全部、仅解锁或关闭，并可减少动画；布局适应窄窗口和浏览器缩放。
@@ -52,7 +87,13 @@
 
 ## 安装与卸载
 
-使用已构建并验证的本地 tgz，仅安装到 `web` profile：
+0.2.0 已通过 [GitHub Release](https://github.com/ghang/dsh-achievement-helper/releases/tag/v0.2.0) 和 [npm](https://www.npmjs.com/package/dsh-achievement-helper/v/0.2.0) 发布。首次安装到 `web` profile：
+
+```sh
+dsh plugin --profile web add dsh-achievement-helper@0.2.0
+```
+
+也可下载 Release 中的预构建 tgz 后安装：
 
 ```sh
 dsh plugin --profile web add /absolute/path/dsh-achievement-helper-0.2.0.tgz
@@ -65,7 +106,7 @@ dsh plugin --profile web remove dsh-achievement-journal
 dsh plugin --profile web add /absolute/path/dsh-achievement-helper-0.2.0.tgz
 ```
 
-0.2.0的公开仓、Release、npm和插件榜分别核验回执。公开后可通过npm同名包或GitHub Release预构建tgz安装；发布步骤见[RELEASING](docs/RELEASING.md)，首版说明见[0.2.0](docs/releases/0.2.0.md)。卸载：
+插件榜收录单独办理；发布步骤见[RELEASING](docs/RELEASING.md)，首版说明见[0.2.0](docs/releases/0.2.0.md)。卸载：
 
 ```sh
 dsh plugin --profile web remove dsh-achievement-helper
