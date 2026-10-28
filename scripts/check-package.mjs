@@ -52,7 +52,7 @@ const pack = JSON.parse(run('npm', ['pack', '--ignore-scripts', '--json', '--pac
   '--cache', join(out, 'npm-cache'), '--userconfig', emptyUser, '--globalconfig', emptyGlobal, '--registry=https://registry.npmjs.org/']))[0];
 const archive = join(staging, pack.filename);
 const portraitFiles = PORTRAIT_STYLE_IDS.flatMap(style => THEME_IDS.map(theme => `lib/assets/portraits/${style}/${theme}.webp`));
-const extraFiles = new Set([...portraitFiles, ...README_SCREENSHOT_PATHS, 'docs/images/README.md', 'lib/portrait-manifest.json', 'lib/client.css']);
+const extraFiles = new Set([...portraitFiles, ...README_SCREENSHOT_PATHS, 'docs/images/README.md', 'lib/portrait-manifest.json', 'lib/client.css', `docs/releases/${manifest.version}.md`]);
 assert.ok(pack.files.every(file => extraFiles.has(file.path) || /^(package.json|README.md|LICENSE|CHANGELOG.md|cordis.patch.yml|lib\/[^/]+\.(?:mjs|js)|docs\/(?:RELEASING\.md|market-entry\.yml|releases\/0\.2\.0\.md))$/.test(file.path)), 'Unexpected packaged files');
 await auditFiles(root, pack.files.map(file => file.path));
 assert.deepEqual(pack.files.filter(file => file.path.endsWith('.webp')).map(file => file.path).sort(), [...portraitFiles].sort(), 'The tgz must contain exactly the twenty reviewed flat/pixel portrait sheets');
@@ -87,7 +87,7 @@ for (const asset of portraitReport.assets) {
 }
 // Tests use only the unpacked code; the same locked dev runtime supplies peers.
 run('/bin/ln', ['-s', join(root, 'node_modules'), join(artifact, 'node_modules')]);
-const artifactTests = run(process.execPath, ['--test', '--test-reporter=tap', 'tests/integration.test.mjs', 'tests/http.test.mjs', 'tests/collection-http.test.mjs', 'tests/debug-http.test.mjs', 'tests/rename-http.test.mjs', 'tests/package-rename.test.mjs', 'tests/generation-integration.test.mjs', 'tests/portrait-assets.test.mjs', 'tests/portrait-http.test.mjs'], { JOURNAL_ARTIFACT: artifact });
+const artifactTests = run(process.execPath, ['--test', '--test-reporter=tap', 'tests/integration.test.mjs', 'tests/http.test.mjs', 'tests/collection-http.test.mjs', 'tests/debug-http.test.mjs', 'tests/rename-http.test.mjs', 'tests/package-rename.test.mjs', 'tests/generation-integration.test.mjs', 'tests/portrait-assets.test.mjs', 'tests/portrait-http.test.mjs', 'tests/windows-storage.test.mjs'], { JOURNAL_ARTIFACT: artifact });
 await writeFile(join(out, 'artifact-tests.tap'), artifactTests);
 assert.match(artifactTests, /# fail 0/); assert.match(artifactTests, /# skipped 0/);
 const bytes = await readFile(archive);

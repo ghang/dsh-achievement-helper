@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { posix } from 'node:path';
+import { posix, win32 } from 'node:path';
 import { createCollector } from '../src/collector.mjs';
 
 function bus() {
@@ -87,6 +87,25 @@ async function fixture(options = {}) {
 }
 const byKind = (f, kind) => f.facts.filter(fact => fact.kind === kind);
 const readValue = (path = '/private/workspace/main.ts') => ({ path, offset: 1, lines: [{ number: 1, text: 'PRIVATE SOURCE' }], totalLines: 1 });
+
+test('Windows drive and UNC paths retain read/change and search/read/change identities', async () => {
+  for (const cwd of ['C:\\work space\\工程', '\\\\server\\share\\工程']) {
+    const f = await fixture({ languageForPath: () => undefined });
+    f.ctx.fs = { resolve: async (path, { cwd }) => ({ path: win32.resolve(cwd, path) }), processPath: target => target.path };
+    const owner = f.session('windows-session', cwd), path = win32.join(cwd, 'main.ts');
+    try {
+      assert.ok(f.collector.contextFor(owner.agent).workspaceKey);
+      f.turn(owner); f.step(owner, 1); f.tool(owner, 'grep', { matches: [{ path: 'main.ts' }] }); f.closeStep(owner, 1);
+      f.step(owner, 2); f.tool(owner, 'read', readValue(path)); f.closeStep(owner, 2);
+      f.step(owner, 3); f.tool(owner, 'edit', { path, before: 'before', after: 'after' }); f.closeStep(owner, 3); f.end(owner);
+      await f.flush();
+      assert.equal(byKind(f, 'file_read').length, 1); assert.equal(byKind(f, 'file_changed').length, 1);
+      assert.equal(byKind(f, 'format_read')[0].key, 'typescript');
+      assert.deepEqual(byKind(f, 'recipe').map(item => item.key).sort(), ['read_then_change', 'search_read_change']);
+      assert.equal(JSON.stringify(f.facts).includes(cwd), false);
+    } finally { await f.collector.dispose(); }
+  }
+});
 
 test('uses the official exact-turn helper, counts cached input once and keeps the schema opaque', async () => {
   const f = await fixture();

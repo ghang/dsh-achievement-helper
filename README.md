@@ -91,26 +91,26 @@
 
 ## 安装与卸载
 
-0.2.0 已通过 [GitHub Release](https://github.com/ghang/dsh-achievement-helper/releases/tag/v0.2.0) 和 [npm](https://www.npmjs.com/package/dsh-achievement-helper/v/0.2.0) 发布。首次安装到 `web` profile：
+当前源码版本为 **0.2.1**，修复 Windows 保存后误报失败与成就页遮挡标题栏的问题，详见[版本说明](docs/releases/0.2.1.md)。本地版本号不代表已经公开发布；请先核对 [GitHub Releases](https://github.com/ghang/dsh-achievement-helper/releases) 或 [npm 准确版本](https://www.npmjs.com/package/dsh-achievement-helper/v/0.2.1)。首次安装到 `web` profile：
 
 ```sh
-dsh plugin --profile web add dsh-achievement-helper@0.2.0
+dsh plugin --profile web add dsh-achievement-helper@0.2.1
 ```
 
 也可下载 Release 中的预构建 tgz 后安装：
 
 ```sh
-dsh plugin --profile web add /absolute/path/dsh-achievement-helper-0.2.0.tgz
+dsh plugin --profile web add /absolute/path/dsh-achievement-helper-0.2.1.tgz
 ```
 
 包名从开发期的 `dsh-achievement-journal` 改为 `dsh-achievement-helper`。已有旧包时，在空闲回合停宿主并备份插件专属存储，先移除旧包再装新包，保留原存储；不要同时启用两个包。新包沿用旧Cordis身份、存储目录、浏览器重试键和四项模型工具，旧HTTP入口兼容到新入口。
 
 ```sh
 dsh plugin --profile web remove dsh-achievement-journal
-dsh plugin --profile web add /absolute/path/dsh-achievement-helper-0.2.0.tgz
+dsh plugin --profile web add /absolute/path/dsh-achievement-helper-0.2.1.tgz
 ```
 
-插件榜收录单独办理；发布步骤见[RELEASING](docs/RELEASING.md)，首版说明见[0.2.0](docs/releases/0.2.0.md)。卸载：
+插件榜收录单独办理；发布步骤见[RELEASING](docs/RELEASING.md)，最新修复说明见[0.2.1](docs/releases/0.2.1.md)，首版说明见[0.2.0](docs/releases/0.2.0.md)。卸载：
 
 ```sh
 dsh plugin --profile web remove dsh-achievement-helper

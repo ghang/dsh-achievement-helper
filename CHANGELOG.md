@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.1
+
+Treat Windows EPERM from opening or syncing a parent directory as an unsupported
+directory durability check after the file replacement has completed. Share this
+handling across the journal, generation receipts and debug copies. Retain real
+file/rename failures, other directory errors, and the original error cause.
+Keep the achievement center and debug banner below the Windows desktop caption
+row, using the host's published height and fullscreen marker. Fit normal, short
+and narrow windows within the remaining viewport without changing Web or macOS
+placement. Add regression coverage for Windows drive/UNC path observation and
+simulated Windows persistence failures. No model-tool or stored-data changes.
+Native Windows host validation remains outside the locally verified scope.
+
 ## 0.2.0
 
 Prepare the first stable package as `dsh-achievement-helper`. Retain the local

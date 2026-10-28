@@ -4,6 +4,7 @@ import { mkdtemp, open, rename, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createJournal, JOURNAL_LIMITS } from './journal.mjs';
+import { syncParentDirectory } from './storage.mjs';
 
 export const DEBUG_LIMITS = Object.freeze({ sessions: 4, ttlMs: 30 * 60 * 1000 });
 const METHODS = Object.freeze({ preferences: 'preferences', equip: 'equip', configure: 'configure', report: 'report', draw: 'draw', configureCharacters: 'configureCharacters', characters: 'configureCharacters', deleteDefinitions: 'deleteDefinitions', rename: 'rename' });
@@ -62,10 +63,7 @@ export function createDebugController({ journal, statePath, now = Date.now, tmpR
       const handle = await open(temporary, 'wx', 0o600);
       try { await handle.writeFile(data); await handle.sync(); } finally { await handle.close(); }
       await rename(temporary, scope.file);
-      let parent;
-      try { parent = await open(directory, 'r'); await parent.sync(); }
-      catch (e) { if (!['EINVAL', 'ENOTSUP', 'EISDIR'].includes(e.code)) throw e; }
-      finally { await parent?.close(); }
+      await syncParentDirectory(scope.file);
       scope.journal = await createJournal({ file: scope.file, now, allowDebug: true });
       ensureOpen(); scope.expiresAt = clock() + DEBUG_LIMITS.ttlMs;
       sessions.set(scope.token, scope);

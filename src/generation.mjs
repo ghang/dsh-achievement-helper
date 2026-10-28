@@ -3,6 +3,7 @@ import { open, mkdir, rename, unlink } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname } from 'node:path';
 import { BlockAssembler } from '@deepseek-ai/dsh-llm';
+import { syncParentDirectory } from './storage.mjs';
 
 const VERSION = 1;
 const LIMITS = Object.freeze({ receipts: 1000, bytes: 4 * 1024 * 1024, maxDefinitions: 6, maxCharacters: 8, maxTokens: 4096, outputBytes: 64 * 1024, timeoutMs: 60000, disposeWaitMs: 2000 });
@@ -197,8 +198,8 @@ async function atomicWrite(file, state) {
     const handle = await open(temporary, 'wx', 0o600);
     try { await handle.writeFile(bytes); await handle.sync(); } finally { await handle.close(); }
     await rename(temporary, file); committed = true;
-    let directory; try { directory = await open(dirname(file), 'r'); await directory.sync(); } catch (e) { if (!['EINVAL', 'ENOTSUP', 'EISDIR'].includes(e.code)) throw e; } finally { await directory?.close(); }
-  } catch (e) { throw Object.assign(new Error('生成回执无法安全保存。'), { code: 'GENERATION_STORAGE', status: 503, committed }); }
+    await syncParentDirectory(file);
+  } catch (cause) { throw Object.assign(new Error('生成回执无法安全保存。', { cause }), { code: 'GENERATION_STORAGE', status: 503, committed }); }
   finally { await unlink(temporary).catch(() => {}); }
 }
 function validateStored(value) {

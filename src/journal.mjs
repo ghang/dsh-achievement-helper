@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import { syncParentDirectory } from './storage.mjs';
 import { THEME_IDS as THEMES, ICON_IDS as ICONS, RARITIES, FRAME_STYLES, COLLECTION_LIMITS, ACHIEVEMENT_THEME_TITLES,
   collectionCatalog, freshCollection, presentCollection, syncCollectionPoints, validateCollection, configureCollectionCharacters, drawCollection } from './collection.mjs';
 
@@ -299,12 +300,9 @@ async function atomicWrite(file, data) {
     const handle = await open(temporary, 'wx', 0o600);
     try { await handle.writeFile(serialized + '\n', 'utf8'); await handle.sync(); } finally { await handle.close(); }
     await rename(temporary, file); committed = true;
-    let directory;
-    try { directory = await open(dirname(file), 'r'); await directory.sync(); }
-    catch (error) { if (!['EINVAL', 'ENOTSUP', 'EISDIR'].includes(error.code)) throw error; }
-    finally { await directory?.close(); }
-  } catch {
-    throw new JournalError(committed ? 'DURABILITY_UNCERTAIN' : 'PERSISTENCE_FAILED', committed ? 'The state was replaced, but directory durability could not be confirmed.' : 'The new journal state could not be persisted; the previous state was retained.', { committed });
+    await syncParentDirectory(file);
+  } catch (cause) {
+    throw new JournalError(committed ? 'DURABILITY_UNCERTAIN' : 'PERSISTENCE_FAILED', committed ? 'The state was replaced, but directory durability could not be confirmed.' : 'The new journal state could not be persisted; the previous state was retained.', { committed, cause });
   } finally { await unlink(temporary).catch(() => {}); }
 }
 async function acquireLock(file, at) {
