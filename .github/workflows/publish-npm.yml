@@ -16,7 +16,7 @@ on:
         options: [verify, publish]
 permissions: {}
 concurrency:
-  group: npm-${{ github.event.release.tag_name || inputs.tag }}
+  group: npm-${{ github.repository }}
   cancel-in-progress: false
 jobs:
   publish:

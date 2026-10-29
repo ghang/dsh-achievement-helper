@@ -73,12 +73,24 @@ export function cleanNpmEnvironment(env) {
 }
 export function checkLatest(latest, version) {
   if (!latest || version.includes('-')) return;
-  require(/^\d+\.\d+\.\d+$/.test(latest.version), 'unexpected-latest-version');
-  const target = version.split('.').map(BigInt), current = latest.version.split('.').map(BigInt);
+  require(compareStableVersions(version, latest.version) >= 0, 'refusing-to-downgrade-latest');
+}
+function compareStableVersions(left, right) {
+  require(/^\d+\.\d+\.\d+$/.test(left) && /^\d+\.\d+\.\d+$/.test(right), 'unexpected-latest-version');
+  const target = left.split('.').map(BigInt), current = right.split('.').map(BigInt);
   for (let index = 0; index < 3; index++) {
-    if (target[index] > current[index]) return;
-    require(target[index] === current[index], 'refusing-to-downgrade-latest');
+    if (target[index] > current[index]) return 1;
+    if (target[index] < current[index]) return -1;
   }
+  return 0;
+}
+export async function waitForStableLatest(readLatest, version, wait = delay) {
+  for (let attempt = 0; attempt < 24; attempt++) {
+    const latest = await readLatest();
+    if (compareStableVersions(latest.version, version) >= 0) return latest.version;
+    await wait(5000);
+  }
+  throw new Error('published-but-latest-needs-inspection');
 }
 function command(program, args, options = {}) {
   const result = spawnSync(program, args, { encoding: 'utf8', timeout: 120000, maxBuffer: 8 * 1024 * 1024, ...options });
@@ -198,9 +210,8 @@ async function main() {
       },
     });
     Object.assign(receipt, result);
-    if (!release.prerelease && result.npmWriteAttempted) {
-      const publishedLatest = await json(REGISTRY + PACKAGE + '/latest');
-      require(publishedLatest.version === version, 'published-but-latest-needs-inspection');
+    if (!release.prerelease && result.status !== 'verified-ready') {
+      receipt.latestVersion = await waitForStableLatest(() => json(REGISTRY + PACKAGE + '/latest'), version);
     }
   } catch (error) {
     receipt.status = 'refused-or-incomplete';

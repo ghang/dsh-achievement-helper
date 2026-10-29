@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PACKAGE, REPOSITORY, hash, versionFromTag, checkManifest, checkRelease, checkChecksums, checkCI, checkNpmMetadata, checkPublishContext, cleanNpmEnvironment, checkLatest, completePublication } from '../scripts/publish-npm.mjs';
+import { PACKAGE, REPOSITORY, hash, versionFromTag, checkManifest, checkRelease, checkChecksums, checkCI, checkNpmMetadata, checkPublishContext, cleanNpmEnvironment, checkLatest, waitForStableLatest, completePublication } from '../scripts/publish-npm.mjs';
 
 const bytes = Buffer.from('synthetic frozen package');
 const version = '0.2.2', tag = 'v' + version, commit = 'a'.repeat(40);
@@ -44,6 +44,13 @@ test('actual publishing requires the tagged SHA, hosted runner and OIDC; inherit
 test('new stable versions cannot move latest backwards', () => {
   checkLatest({ version: '0.2.1' }, version); checkLatest({ version }, version); checkLatest({ version: '1.0.0' }, '0.2.3-rc.1');
   assert.throws(() => checkLatest({ version: '0.2.3' }, version));
+});
+test('latest propagation is awaited without another write, including existing-version recovery', async () => {
+  let reads = 0, waits = 0;
+  const observed = await waitForStableLatest(async () => ({ version: ++reads < 3 ? '0.2.1' : version }), version, async () => { waits++; });
+  assert.equal(observed, version); assert.equal(reads, 3); assert.equal(waits, 2);
+  assert.equal(await waitForStableLatest(async () => ({ version: '0.2.3' }), version), '0.2.3');
+  await assert.rejects(waitForStableLatest(async () => ({ version: '0.2.1' }), version, async () => {}), /latest-needs-inspection/);
 });
 test('read-only verification and matching repeated releases never attempt an npm write', async () => {
   const forbidden = () => assert.fail('unexpected npm write');
