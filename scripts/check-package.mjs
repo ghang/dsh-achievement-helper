@@ -52,7 +52,7 @@ const pack = JSON.parse(run('npm', ['pack', '--ignore-scripts', '--json', '--pac
   '--cache', join(out, 'npm-cache'), '--userconfig', emptyUser, '--globalconfig', emptyGlobal, '--registry=https://registry.npmjs.org/']))[0];
 const archive = join(staging, pack.filename);
 const portraitFiles = PORTRAIT_STYLE_IDS.flatMap(style => THEME_IDS.map(theme => `lib/assets/portraits/${style}/${theme}.webp`));
-const extraFiles = new Set([...portraitFiles, ...README_SCREENSHOT_PATHS, 'docs/images/README.md', 'lib/portrait-manifest.json', 'lib/client.css', `docs/releases/${manifest.version}.md`]);
+const extraFiles = new Set([...portraitFiles, ...README_SCREENSHOT_PATHS, 'docs/images/README.md', 'lib/portrait-manifest.json', 'lib/client.css', 'docs/releases/0.2.1.md', `docs/releases/${manifest.version}.md`]);
 assert.ok(pack.files.every(file => extraFiles.has(file.path) || /^(package.json|README.md|LICENSE|CHANGELOG.md|cordis.patch.yml|lib\/[^/]+\.(?:mjs|js)|docs\/(?:RELEASING\.md|market-entry\.yml|releases\/0\.2\.0\.md))$/.test(file.path)), 'Unexpected packaged files');
 await auditFiles(root, pack.files.map(file => file.path));
 assert.deepEqual(pack.files.filter(file => file.path.endsWith('.webp')).map(file => file.path).sort(), [...portraitFiles].sort(), 'The tgz must contain exactly the twenty reviewed flat/pixel portrait sheets');

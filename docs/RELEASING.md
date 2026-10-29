@@ -1,8 +1,51 @@
 # 发布流程
 
-维护日期：2026-10-26。`dsh-achievement-helper@0.2.0` 已在 [GitHub Release](https://github.com/ghang/dsh-achievement-helper/releases/tag/v0.2.0) 与 [npm](https://www.npmjs.com/package/dsh-achievement-helper/v/0.2.0) 发行，两处公开下载与冻结包一致。唯一公开仓为 `ghang/dsh-achievement-helper`；插件榜投稿单独办理。README 截图是发行后的仓库文档更新，已发布的 tag 和安装包保持冻结。
+维护日期：2026-10-29。`dsh-achievement-helper@0.2.1` 已在 [GitHub Release](https://github.com/ghang/dsh-achievement-helper/releases/tag/v0.2.1) 与 [npm](https://www.npmjs.com/package/dsh-achievement-helper/v/0.2.1) 发行，两处公开包与冻结包一致。唯一公开仓为 `ghang/dsh-achievement-helper`；插件榜投稿单独办理。已发布的 tag 和安装包保持冻结。
 
 发布使用同一份验证过的 tgz：GitHub Release 保存预构建包和校验和，npm 官方公共源提供按包名安装，awesome-dsh-plugin 负责收录与发现。各渠道的上传、公开下载、市场可见和本机升级分别验收。
+
+## npm OIDC 工作流
+
+从0.2.2开始提供 `.github/workflows/publish-npm.yml`：GitHub Release 的
+`published` 事件触发托管Ubuntu runner，核对准确来源tag、同SHA成功双Node CI、
+包身份及资产SHA-256，然后将已冻结的版本tgz直接上传npm。固定名tgz通过GitHub
+服务端摘要确认同包，不重复下载。工作流不重建候选，也不重复执行完整测试。
+它不保存npm Token；发布job使用 `id-token: write`、`contents: read` 和
+`actions: read`，npm在空工作目录使用独立空user/global配置获取OIDC身份。
+
+一次性在npm包Settings的Trusted Publisher中绑定：owner `ghang`，repository
+`dsh-achievement-helper`，workflow filename `publish-npm.yml`，不填environment，
+允许直接 `npm publish`。首次配置仍需维护者二次验证，新绑定须在2天内完成首次
+成功发行。先让workflow存在且通过检查，再临近获授权的新版本时绑定。
+配置保存成功不能作为真实OIDC发行已通过的证据。
+[官方配置规则](https://docs.npmjs.com/trusted-publishers/)，核查日期2026-10-29。
+
+可先用已发行版本在main运行只读检查：
+
+```sh
+gh workflow run publish-npm.yml --repo ghang/dsh-achievement-helper \
+  --ref main -f tag=v0.2.1 -f mode=verify
+```
+
+新版本须先生成候选、通过CI、建立附注tag，再公开GitHub Release。工作流将核对
+GitHub服务端摘要与读取到的原包，并检查npm准确版本的SHA-1、SHA-512、公开下载
+状态及稳定版latest；同版本已存在且摘要一致时只验收，不重复写入。不同摘要、
+CI缺失或失败、输入与tag不符、错误仓库和非托管runner均阻断实际上传。
+发布回执保存在Actions artifact `npm-publication-<run>-<attempt>`。
+
+恢复只运行对应已授权tag的工作流，例如下个新版本为0.2.2时：
+
+```sh
+gh workflow run publish-npm.yml --repo ghang/dsh-achievement-helper \
+  --ref v0.2.2 -f tag=v0.2.2 -f mode=publish
+```
+
+实际上传要求工作流的 `GITHUB_SHA` 和 `GITHUB_REF` 均对应该tag，不允许从main
+借用其他tag的身份发布。主分支verify通过只证明读路径，首次新版本的真实npm
+发行才证明OIDC绑定有效。原有本机TTY流程作为明确选择的人工路径保留。
+若将来在Actions中用 `GITHUB_TOKEN` 创建Release，应合并发布job或显式dispatch，
+不能依赖它再次触发release工作流。
+[GitHub触发限制](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)。
 
 ## 1. 核对源码、身份与版本
 

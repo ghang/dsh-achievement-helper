@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2
+
+Add a GitHub Actions workflow for npm trusted publishing. It publishes the frozen
+GitHub Release tarball with OIDC after checking the annotated source tag, the
+successful Node 22/24 CI, server SHA-256 digests and package identity. Verify-only
+runs and matching already-published versions do not upload anything. Preserve
+the existing runtime, Windows fixes, storage format and four model tools.
+
 ## 0.2.1
 
 Treat Windows EPERM from opening or syncing a parent directory as an unsupported
